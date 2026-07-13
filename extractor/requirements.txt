@@ -1,0 +1,15 @@
+# Pipeline de extração híbrida — requer ambiente com GPU (ex.: Google Colab, T4).
+# Instale com:  pip install -r requirements.txt
+#
+# Observação: docling / chandra-ocr / doclayout-yolo baixam modelos de ML
+# (HuggingFace / PyTorch) na primeira execução.
+
+docling
+chandra-ocr[hf]
+doclayout-yolo
+PyMuPDF
+beautifulsoup4
+Pillow
+pandas
+huggingface_hub
+torch
