@@ -1,0 +1,17 @@
+# Normaliza fim de linha no repositório (evita avisos LF/CRLF)
+* text=auto eol=lf
+
+# Notebooks e dados como texto
+*.ipynb text
+*.json text
+*.md   text
+*.html text
+*.css  text
+*.js   text
+
+# Binários (não normalizar)
+*.jpg  binary
+*.jpeg binary
+*.png  binary
+*.webp binary
+*.pdf  binary

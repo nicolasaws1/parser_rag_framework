@@ -1,18 +1,51 @@
-# backups e temporários
-*.bak
-*.bak.*
-*.bak.html
-__pycache__/
-*.pyc
-.ipynb_checkpoints/
+# ─────── Sistema operacional ───────
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# artefatos de empacotamento
+# ─────── Python ───────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# ─────── Node (caso o front evolua p/ build) ───────
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# ─────── Editores / IDE ───────
+.vscode/
+.idea/
+*.swp
+*~
+
+# ─────── Logs e temporários ───────
+*.log
+*.tmp
+*.bak
+*.bak.*
+
+# ─────── Artefatos de empacotamento ───────
 *.zip
+*.tar.gz
 
-# nunca versionar segredos
+# ─────── Segredos — NUNCA versionar ───────
 .env
+.env.*
 *.token
 *_token*
 secrets*
+*.pem
+*.key
+
+# ─────── Claude Code (estado transitório) ───────
+.claude/worktrees/
