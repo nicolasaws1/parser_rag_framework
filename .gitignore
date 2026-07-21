@@ -41,6 +41,7 @@ yarn-error.log*
 # ─────── Segredos — NUNCA versionar ───────
 .env
 .env.*
+!.env.example
 *.token
 *_token*
 secrets*
