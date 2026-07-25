@@ -99,16 +99,35 @@ def ingest_doc(entry: dict) -> None:
         "doi": meta.get("doi"),
     }).execute()
 
-    # 4) page_images (+ upload no bucket "images")
+    # 4) page_images (+ upload no bucket "images") + metadados da página
     imgs = []
     for pg in paginas:
         local = doc_dir / pg["img"]                 # pages/pNNN.jpg
         remoto = f"{slug}/{pg['img']}"
         if local.exists():
             _upload("images", remoto, local, "image/jpeg")
-        imgs.append({"pdf_id": pdf_id, "page_number": pg["n"], "image_file": remoto})
+        imgs.append({
+            "pdf_id": pdf_id,
+            "page_number": pg["n"],
+            "image_file": remoto,
+            # metadados por página (colunas opcionais — ver COLUNAS_PAGINA)
+            "route": pg.get("rota"),
+            "page_type": pg.get("tipo"),
+            "width": pg.get("w"),
+            "height": pg.get("h"),
+        })
     if imgs:
-        sb.table("page_images").insert(imgs).execute()
+        try:
+            sb.table("page_images").insert(imgs).execute()
+        except Exception as e:
+            if "column" not in str(e).lower():
+                raise
+            # colunas de metadados ainda não existem no schema -> insere o básico
+            print("    ⚠️  page_images sem as colunas de metadados; gravando só a imagem")
+            sb.table("page_images").insert(
+                [{k: v for k, v in i.items() if k in ("pdf_id", "page_number", "image_file")}
+                 for i in imgs]
+            ).execute()
 
     # 5) page_blocks — layout por bloco (bbox + markdown + bloco completo)
     blocos = [

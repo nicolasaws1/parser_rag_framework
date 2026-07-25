@@ -129,10 +129,18 @@ def obter_documento(pdf_id: str):
     pdf = pdf[0]
 
     meta = sb.table("article_metadata").select("*").eq("pdf_id", pdf_id).execute().data
-    imgs = (
-        sb.table("page_images").select("page_number,image_file")
-        .eq("pdf_id", pdf_id).order("page_number").execute().data
-    )
+    try:
+        imgs = (
+            sb.table("page_images")
+            .select("page_number,image_file,route,page_type,width,height")
+            .eq("pdf_id", pdf_id).order("page_number").execute().data
+        )
+    except Exception:
+        # schema sem as colunas de metadados por página
+        imgs = (
+            sb.table("page_images").select("page_number,image_file")
+            .eq("pdf_id", pdf_id).order("page_number").execute().data
+        )
     blocos = (
         sb.table("page_blocks").select("page_number,block_type,markdown_text,bbox,layout")
         .eq("pdf_id", pdf_id).order("page_number").execute().data
@@ -149,6 +157,10 @@ def obter_documento(pdf_id: str):
         {
             "n": img["page_number"],
             "img_url": _signed(img["image_file"]),
+            "rota": img.get("route"),          # docling | chandra
+            "tipo": img.get("page_type"),      # organica | escaneada
+            "w": img.get("width"),
+            "h": img.get("height"),
             "blocos": por_pagina.get(img["page_number"], []),
         }
         for img in imgs
