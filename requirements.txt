@@ -1,0 +1,6 @@
+# Backend (API de leitura) + ingestão — servidor SEM GPU
+fastapi
+uvicorn[standard]
+supabase
+python-dotenv
+httpx
