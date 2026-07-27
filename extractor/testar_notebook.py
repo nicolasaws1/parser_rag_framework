@@ -16,6 +16,9 @@ PREINSTALADO = {
     'transformers','IPython',
 }
 # pacote pip -> módulo importável
+# pacotes que trazem módulos adicionais junto (dependências transitivas)
+EXTRAS = {'docling': {'docling_core'}, 'mineru': {'magic_pdf'},
+          'marker': {'surya'}, 'chandra': {'surya'}}
 PIP_PARA_MODULO = {
     'PyMuPDF':'fitz', 'mineru':'mineru', 'mineru[core]':'mineru',
     'doclayout-yolo':'doclayout_yolo', 'chandra-ocr':'chandra', 'chandra-ocr[hf]':'chandra',
@@ -46,7 +49,8 @@ def instalados_por(src):
         for tok in re.findall(r'[A-Za-z0-9_.\-\[\]]+', linha.split('pip install')[1]):
             if tok in ('-q','-U','--upgrade','install','pip','q'):
                 continue
-            out.add(PIP_PARA_MODULO.get(tok, tok.split('[')[0].replace('-','_')))
+            m = PIP_PARA_MODULO.get(tok, tok.split('[')[0].replace('-','_'))
+            out.add(m); out |= EXTRAS.get(m, set())
     return out
 
 def nomes_definidos(src):
