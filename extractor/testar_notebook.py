@@ -4,7 +4,7 @@
    - todo import está disponível no momento em que a célula roda?
    - todo nome usado foi definido por uma célula anterior?
 """
-import json, ast, sys, io, re
+import json, ast, sys, io, re, builtins
 from pathlib import Path
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
@@ -110,7 +110,7 @@ def testar(caminho, fases):
     for nome_fase, indices in fases:
         print(f"\n--- {nome_fase} ---")
         disp = set(PREINSTALADO)                    # módulos disponíveis
-        definidos = set(dir(__builtins__)) | {'__name__','True','False','None'}
+        definidos = set(dir(builtins)) | {'__name__','True','False','None'}
         for k in indices:
             i, src = cod[k]
             rotulo = f"célula[{i}]"
@@ -130,7 +130,7 @@ def testar(caminho, fases):
             usados = nomes_usados(src)
             nao_def = sorted(u for u in usados
                              if u not in definidos and u not in disp
-                             and not hasattr(__builtins__, u) and u not in dir(__builtins__))
+                             and not hasattr(builtins, u))
             if faltando:
                 problemas.append(f"{nome_fase} {rotulo}: import indisponível {faltando}")
                 print(f"  {rotulo}  ❌ import sem instalação: {faltando}")
@@ -150,4 +150,5 @@ def testar(caminho, fases):
 if __name__ == "__main__":
     NB = r"C:\Users\nicol\OneDrive\Área de Trabalho\SB100\squad-2\extractor\hybrid_mineru_2fases.ipynb"
     # índices das células de CÓDIGO (não do notebook): 0=config 1=inst1 2=fase1 3=inst2 4=func2 5=fase2
-    testar(NB, [("FASE 1", [0, 1, 2]), ("FASE 2 (após restart)", [0, 3, 4, 5])])
+    # 0=config 1=inst1 2=fase1 | 3=inst2 4=verif 5=funcs2 6=fase2
+    testar(NB, [("FASE 1", [0, 1, 2]), ("FASE 2 (após restart)", [0, 3, 4, 5, 6])])
