@@ -156,6 +156,7 @@
   .ex-rota{font-size:9.5px;font-weight:700;padding:3px 10px;border-radius:12px;letter-spacing:.5px;text-transform:uppercase;display:none;}
   .rota-chandra{background:#e3f0fc;color:#1e88e5;}
   .rota-docling{background:var(--verde-claro);color:var(--verde);}
+  .rota-mineru{background:#f3e8fd;color:#7c3aed;}
   .ex-split{flex:1;display:flex;min-height:0;}
 
   .pdf-pane{flex:1.15;overflow:auto;background:#EEF0F3;padding:24px;}
@@ -637,7 +638,7 @@ function renderPagina(){
   const pg = pags[paginaAtual-1];
   el("ex-page-inp").value = paginaAtual; el("ex-total").textContent = d.n_paginas;
   var _rota = el("ex-rota");
-  if(pg && pg.rota){ _rota.style.display="inline-block"; _rota.className="ex-rota rota-"+pg.rota; _rota.textContent = pg.rota==="chandra"?"Chandra":"Docling"; }
+  if(pg && pg.rota){ _rota.style.display="inline-block"; _rota.className="ex-rota rota-"+pg.rota; _rota.textContent = ({chandra:"Chandra",docling:"Docling",mineru:"MinerU"})[pg.rota] || pg.rota; }
   else { _rota.style.display="none"; }
   el("pg-prev").disabled = (paginaAtual===1);
   el("pg-next").disabled = (paginaAtual>=pags.length);
