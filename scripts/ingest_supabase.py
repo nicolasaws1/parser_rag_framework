@@ -29,10 +29,25 @@ load_dotenv()
 sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "front" / "data"      # artefatos da extração
 PDF_DIR = Path.home() / "Downloads"      # PDFs originais
 PIPELINE = "hibrido: DocLayout-YOLO + Chandra OCR 2 + Docling + PyMuPDF"
 FORCE = "--force" in sys.argv
+
+# pasta dos artefatos: 1º argumento, ou front/data por padrão
+_args = [a for a in sys.argv[1:] if not a.startswith("--")]
+DATA_DIR = Path(_args[0]) if _args else ROOT / "front" / "data"
+
+
+def _limpar(v):
+    """Remove bytes NUL (\\u0000) — o Postgres rejeita em text e jsonb.
+    Alguns PDFs trazem NUL na camada de texto; sem isso o insert falha (código 22P05)."""
+    if isinstance(v, str):
+        return v.replace("\x00", "")
+    if isinstance(v, dict):
+        return {k: _limpar(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_limpar(x) for x in v]
+    return v
 
 
 def _int(v, default=None):
@@ -80,7 +95,7 @@ def ingest_doc(entry: dict) -> None:
     tempo_ms = _int(round((lay.get("tempo_s") or 0) * 1000), None) or None
     pdf_id = sb.table("pdfs").insert({
         "pdf_file": pdf_path,
-        "markdown": md,
+        "markdown": _limpar(md),
         "total_pages": entry.get("n_paginas"),
         "approved": True,      "approved_at": agora,
         "extracted": True,     "extracted_at": agora,
@@ -92,11 +107,11 @@ def ingest_doc(entry: dict) -> None:
     # 3) article_metadata
     sb.table("article_metadata").insert({
         "pdf_id": pdf_id,
-        "title": meta.get("titulo"),
-        "authors": meta.get("autores"),
-        "journal": meta.get("periodico"),
+        "title": _limpar(meta.get("titulo")),
+        "authors": _limpar(meta.get("autores")),
+        "journal": _limpar(meta.get("periodico")),
         "year": _int(meta.get("ano")),
-        "doi": meta.get("doi"),
+        "doi": _limpar(meta.get("doi")),
     }).execute()
 
     # 4) page_images (+ upload no bucket "images") + metadados da página
@@ -135,9 +150,9 @@ def ingest_doc(entry: dict) -> None:
             "pdf_id": pdf_id,
             "page_number": pg["n"],
             "block_type": b.get("tipo"),
-            "markdown_text": b.get("md"),
+            "markdown_text": _limpar(b.get("md")),
             "bbox": b.get("bbox"),      # jsonb
-            "layout": b,                # jsonb: bloco completo (tabela, fig, caption...)
+            "layout": _limpar(b),                # jsonb: bloco completo (tabela, fig, caption...)
         }
         for pg in paginas for b in pg.get("blocos", [])
     ]
