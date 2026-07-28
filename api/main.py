@@ -10,6 +10,7 @@ Rodar:
     # http://localhost:8000
 """
 import os
+import re
 from pathlib import Path
 from uuid import UUID
 
@@ -85,10 +86,18 @@ def listar_documentos():
     # NOTA: agrega no Python. Em escala (dezenas de milhares de blocos) trocar por
     #       uma view/RPC no Postgres que já devolva os totais agregados.
     agregados: dict[str, dict] = {i: {"tabelas": 0, "figuras": 0, "formulas": 0} for i in ids}
-    blocos = (
-        sb.table("page_blocks").select("pdf_id,block_type")
-        .in_("pdf_id", ids).limit(100_000).execute().data
-    )
+    blocos: list[dict] = []
+    passo = 1000                     # o PostgREST limita a resposta; pagina até esgotar
+    inicio = 0
+    while True:
+        lote = (
+            sb.table("page_blocks").select("pdf_id,block_type")
+            .in_("pdf_id", ids).range(inicio, inicio + passo - 1).execute().data
+        )
+        blocos.extend(lote)
+        if len(lote) < passo:
+            break
+        inicio += passo
     for b in blocos:
         alvo = agregados.get(b["pdf_id"])
         if alvo is None:
@@ -145,6 +154,14 @@ def obter_documento(pdf_id: str):
         sb.table("page_blocks").select("page_number,block_type,markdown_text,bbox,layout")
         .eq("pdf_id", pdf_id).order("page_number").execute().data
     )
+    # O Postgres não garante ordem dentro da página, e a ordem de leitura importa:
+    # sem isto os blocos saem embaralhados (o título de seção antes do parágrafo que
+    # o antecede). O id do bloco ('pN-bM') carrega a posição original.
+    def _indice(b):
+        m = re.search(r"-b(\d+)$", ((b.get("layout") or {}).get("id") or ""))
+        return int(m.group(1)) if m else 10**6
+
+    blocos.sort(key=lambda b: (b["page_number"], _indice(b)))
 
     # agrupa blocos por página, no formato que o front já entende
     por_pagina: dict[int, list] = {}
