@@ -143,33 +143,79 @@ def limpar_figura(mdk):
     return t
 
 # ── fonte sem mapeamento Unicode ───────────────────────────────────────────
-MIN_CHARS_PERDIDOS = 4     # trecho menor que isto e' simbolo solto, nao texto
+# Alguns PDFs embutem a fonte sem a tabela `cmap` e com o `ToUnicode` vazio: o
+# arquivo guarda o DESENHO da letra, nao a informacao de que letra ela e'. A camada
+# de texto devolve indices de glifo — ')LFKDHODERUDGDSHOR' no lugar de 'Ficha
+# elaborada pelo'. Docling e PyMuPDF leem os mesmos bytes e erram igual.
+#
+# Aqui o bloco e' decodificado somando o deslocamento. LIMITE CONHECIDO: o
+# deslocamento so' e' constante no ASCII; nos acentuados nao ha' offset unico
+# (ç 0x78, ã 0x76, í 0x79, ú 0x7c), entao 'Documentação' sai 'Documentaomo'.
+# Recupera a palavra, aproxima o acento. So' o OCR sobre os pixels acertaria tudo,
+# ao custo de 28.9s por pagina (Chandra) ou de descartar a camada de texto boa
+# (Docling com force_full_page_ocr, que derrubou o Bernardi de 94.5% para 90.1%).
+FONTE_OFFSET = 0x1D
 
-def perda_sem_mapa(fpage, minimo=MIN_CHARS_PERDIDOS):
-    """Quantos caracteres a pagina perde por falta de mapeamento Unicode.
+_PAL_COMUNS = set(("de da do das dos em no na nos nas para por com sem sobre ou um uma que "
+                   "the of and to in for with on at is are was were this that be by as from "
+                   "ao aos pelo pela").split())
+# trechos de 3+ letras: pegam o caso sem espaco, onde nao ha' fronteira de palavra
+_SUB_COMUNS = ("ent ade ida cao para pelo com que est ura ico ica men tion ing the and "
+               "for with ment able tive").split()
 
-    Alguns PDFs embutem a fonte sem a tabela `cmap` e com um `ToUnicode` vazio: o
-    arquivo guarda o DESENHO da letra, nao a informacao de que letra ela e'. A
-    camada de texto devolve entao indices de glifo — ')LFKDHODERUDGDSHOR' no lugar
-    de 'Ficha elaborada pelo'. O MuPDF marca esses caracteres com U+FFFD, e e' esse
-    o sinal usado aqui: exato, sem heuristica sobre o texto.
+def _desloca(s, off=FONTE_OFFSET):
+    # o espaco real fica como esta: 0x20+0x1D daria '='
+    return "".join(c if c == ' ' else (chr(ord(c)+off) if 0 <= ord(c) < 0x60 else c) for c in s)
 
-    Nenhum extrator de camada de texto recupera isso, porque a informacao nao esta
-    no arquivo — Docling e PyMuPDF leem os mesmos bytes e erram igual. Somar um
-    deslocamento fixo (+0x1D) acerta o ASCII por coincidencia da ordem em que o
-    subset numerou os glifos, mas erra os acentos ('Documentaomo' por
-    'Documentação'). So' o OCR sobre os pixels recupera, porque la' o desenho da
-    letra esta intacto.
+def _n_palavras(s):
+    """Tokens INTEIROS que sao palavra comum.
 
-    Trechos com menos de `minimo` caracteres sao ignorados: medindo o corpus, sao
-    simbolos isolados (marcador, sinal matematico, ligadura), nao texto. Contar
-    esses inflaria de 19 para 57 os documentos a re-OCR-ar, e re-OCR-ar pagina boa
-    introduz erro onde nao havia.
+    Pedaco de token nao vale: '(PAR)' decodifica para 'Em^oF', e enxergar 'em'
+    e 'of' la' dentro fazia o decodificador destruir a linha
+    'Radiation (PAR) = 950 umol...' -> 'oadiation Em^oF Z VRM...'.
+    """
+    n = 0
+    for tok in s.lower().split():
+        limpo = tok.strip(".,;:()[]{}\"'!?-")
+        if limpo.isalpha() and limpo in _PAL_COMUNS:
+            n += 1
+    return n
 
-    Medido em 186 PDFs: 19 documentos e 509 paginas com perda real."""
-    return sum(n for sp in fpage.get_texttrace()
-               for n in [sum(1 for c in sp['chars'] if c[0] == 0xFFFD)]
-               if n >= minimo)
+def _n_trechos(s):
+    s = s.lower()
+    return sum(s.count(t) for t in _SUB_COMUNS)
+
+def fonte_sem_mapa(txt):
+    """O texto so' vira legivel depois de somar o deslocamento?
+
+    Duas condicoes, e as duas sao necessarias:
+      - o ORIGINAL nao parece texto (<=1). Sem isso, sigla maiuscula entre
+        parenteses dava falso positivo: '(PAR)' decodifica para 'Em^oF' e as
+        letras soltas casavam com palavras comuns de uma letra.
+      - decodificar faz aparecer 2+ marcas de texto que nao existiam.
+
+    Conta tambem trechos de 3 letras, senao a variante sem espaco
+    ')LFKDHODERUDGDSHOR' passava batido por nao ter fronteira de palavra.
+    Decide pelo BLOCO inteiro, nunca token a token: decodificar por token
+    corrompe sigla em texto bom ('(ECO)' vira 'Eb`lF', 'SYBR' vira 'pv_o').
+    O custo e' que bloco misto — metade quebrada, metade boa — fica intacto,
+    com o lixo. E' a direcao segura: nao corromper texto correto vale mais
+    que limpar todo o lixo.
+
+    Validado em 19 casos reais do corpus: 18 certos, e o unico erro e' um
+    bloco misto deixado como esta'."""
+    if not txt or len(txt) < 15:
+        return False
+    if _n_palavras(txt) > 1 or _n_trechos(txt) > 1:
+        return False                   # ja' parece texto -> nao encosta
+    d = _desloca(txt)
+    if txt.count(' ') >= 3:            # ha' fronteira de palavra
+        return _n_palavras(d) - _n_palavras(txt) >= 2
+    return _n_trechos(d) - _n_trechos(txt) >= 3   # sem espaco: so' resta o trecho
+
+def corrigir_fonte(md):
+    """Decodifica o bloco se ele estiver com a fonte sem mapa; senao devolve igual."""
+    return _desloca(md) if fonte_sem_mapa(md) else md
 
 # ── YOLO ──
 def detectar_regioes(img_path, w, h, conf=YOLO_CONF):
@@ -182,9 +228,32 @@ def detectar_regioes(img_path, w, h, conf=YOLO_CONF):
                     'bbox':[float(x0)/w,float(y0)/h,float(x1)/w,float(y1)/h],'conf':float(cf)})
     return out
 
+def tem_duas_colunas(regs, folga=0.02, larg_max=0.55, sobrep=0.5):
+    """Ha' par de blocos ESTREITOS lado a lado na mesma faixa vertical?
+
+    So' isso caracteriza duas colunas. Sem a checagem, uma folha de rosto
+    centralizada era fatiada em duas: os blocos tem largura ~0.61, logo abaixo do
+    full_thr, e o centro cai perto de 0.5 — metade ia para o balde da esquerda,
+    metade para o da direita, e o texto saia embaralhado ('O Conteudo do Texto'
+    antes de '1. Adubacao', 'Tiragem' antes de 'A reproducao').
+
+    Exige bloco estreito e sobreposicao vertical real, senao numero de pagina ao
+    lado do cabecalho ja' contaria como coluna. Medido no corpus: 169 paginas
+    Chandra com duas colunas, 128 com uma."""
+    bs = [r['bbox'] for r in regs if r.get('bbox') and (r['bbox'][2]-r['bbox'][0]) < larg_max]
+    for i, A in enumerate(bs):
+        for B in bs[i+1:]:
+            ov = min(A[3], B[3]) - max(A[1], B[1])
+            menor = min(A[3]-A[1], B[3]-B[1])
+            if menor > 0 and ov/menor >= sobrep and (A[2] < B[0]+folga or B[2] < A[0]+folga):
+                return True
+    return False
+
 def ordenar_regioes(regs, x_split=0.5, full_thr=0.62):
     cx=lambda r:(r['bbox'][0]+r['bbox'][2])/2; wd=lambda r:r['bbox'][2]-r['bbox'][0]
     regs=sorted(regs,key=lambda r:(round(r['bbox'][1],3),cx(r)))
+    if not tem_duas_colunas(regs):
+        return regs                        # coluna unica: a ordem de leitura e' topo->base
     ordem,esq,dirr=[],[],[]
     def flush():
         ordem.extend(sorted(esq,key=lambda r:r['bbox'][1])); ordem.extend(sorted(dirr,key=lambda r:r['bbox'][1]))
@@ -512,22 +581,20 @@ def exportar_pdf(nome):
         # camada de texto selecionável (limiar) -> decide se a página é orgânica ou escaneada
         texto_cru = fpage.get_text('text') or ''
         tem_texto = len(texto_cru.strip()) >= TEXTO_MIN_CHARS
-        _perdidos = perda_sem_mapa(fpage)                  # texto que o PDF nao sabe traduzir
         regioes=detectar_regioes(img_path, w, h)
         tem_tabela = any(r['tipo_rota']=='tabela' for r in regioes)
-        # a pagina inteira vai ao OCR, nao so' o trecho ruim: recorte de 1-2 linhas
-        # faz o Chandra devolver vazio ou repetir em loop, e bloco meio-quebrado
-        # meio-bom escapa do descarte e sai duplicado (medido no Boletim 100 p6/p200)
-        if not tem_texto or _perdidos:
-            blocos=blocos_chandra(im_hi, regioes)         # sem camada de texto OU fonte sem mapa -> OCR
-            rota='chandra'
-            tipo_pg='fonte-sem-mapa' if _perdidos else 'escaneada'
+        if not tem_texto:
+            blocos=blocos_chandra(im_hi, regioes)         # sem camada de texto -> OCR
+            rota='chandra'; tipo_pg='escaneada'
         elif tem_tabela:
             blocos=blocos_chandra(im_hi, regioes)         # Chandra full-page + data-bbox; YOLO manda em tabela-vs-figura
             rota='chandra'; tipo_pg='organica'
         else:
             blocos=blocos_docling(doc, pno, fpage, itens_pag.get(pno,[]), regioes, im_hi)
             rota='docling'; tipo_pg='organica'
+        for b in blocos:                       # fonte sem mapa Unicode -> decodifica
+            _c = corrigir_fonte(b.get('md'))
+            if _c != b.get('md'): b['md']=_c; b['fonte_corrigida']=True
         for j,b in enumerate(blocos): b['id']=f'p{pno}-b{j}'
         # salva recortes de figuras/gráficos p/ recuperação posterior na busca
         for b in blocos:
