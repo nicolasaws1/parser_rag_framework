@@ -82,6 +82,7 @@ def meta_do(nome):
 print("meta ok:", len(META))
 
 # ───── cell 6 ─────
+import statistics
 # ── render + crop ──
 def render_paginas(page):
     esc = HIGH_DPI/72.0
@@ -140,6 +141,35 @@ def limpar_figura(mdk):
     t = re.sub(r'[ \t]{2,}', ' ', t)
     t = re.sub(r'\n{3,}', '\n\n', t).strip()
     return t
+
+# ── fonte sem mapeamento Unicode ───────────────────────────────────────────
+MIN_CHARS_PERDIDOS = 4     # trecho menor que isto e' simbolo solto, nao texto
+
+def perda_sem_mapa(fpage, minimo=MIN_CHARS_PERDIDOS):
+    """Quantos caracteres a pagina perde por falta de mapeamento Unicode.
+
+    Alguns PDFs embutem a fonte sem a tabela `cmap` e com um `ToUnicode` vazio: o
+    arquivo guarda o DESENHO da letra, nao a informacao de que letra ela e'. A
+    camada de texto devolve entao indices de glifo — ')LFKDHODERUDGDSHOR' no lugar
+    de 'Ficha elaborada pelo'. O MuPDF marca esses caracteres com U+FFFD, e e' esse
+    o sinal usado aqui: exato, sem heuristica sobre o texto.
+
+    Nenhum extrator de camada de texto recupera isso, porque a informacao nao esta
+    no arquivo — Docling e PyMuPDF leem os mesmos bytes e erram igual. Somar um
+    deslocamento fixo (+0x1D) acerta o ASCII por coincidencia da ordem em que o
+    subset numerou os glifos, mas erra os acentos ('Documentaomo' por
+    'Documentação'). So' o OCR sobre os pixels recupera, porque la' o desenho da
+    letra esta intacto.
+
+    Trechos com menos de `minimo` caracteres sao ignorados: medindo o corpus, sao
+    simbolos isolados (marcador, sinal matematico, ligadura), nao texto. Contar
+    esses inflaria de 19 para 57 os documentos a re-OCR-ar, e re-OCR-ar pagina boa
+    introduz erro onde nao havia.
+
+    Medido em 186 PDFs: 19 documentos e 509 paginas com perda real."""
+    return sum(n for sp in fpage.get_texttrace()
+               for n in [sum(1 for c in sp['chars'] if c[0] == 0xFFFD)]
+               if n >= minimo)
 
 # ── YOLO ──
 def detectar_regioes(img_path, w, h, conf=YOLO_CONF):
@@ -482,11 +512,16 @@ def exportar_pdf(nome):
         # camada de texto selecionável (limiar) -> decide se a página é orgânica ou escaneada
         texto_cru = fpage.get_text('text') or ''
         tem_texto = len(texto_cru.strip()) >= TEXTO_MIN_CHARS
+        _perdidos = perda_sem_mapa(fpage)                  # texto que o PDF nao sabe traduzir
         regioes=detectar_regioes(img_path, w, h)
         tem_tabela = any(r['tipo_rota']=='tabela' for r in regioes)
-        if not tem_texto:
-            blocos=blocos_chandra(im_hi, regioes)         # SEM camada de texto -> OCR full-page
-            rota='chandra'; tipo_pg='escaneada'
+        # a pagina inteira vai ao OCR, nao so' o trecho ruim: recorte de 1-2 linhas
+        # faz o Chandra devolver vazio ou repetir em loop, e bloco meio-quebrado
+        # meio-bom escapa do descarte e sai duplicado (medido no Boletim 100 p6/p200)
+        if not tem_texto or _perdidos:
+            blocos=blocos_chandra(im_hi, regioes)         # sem camada de texto OU fonte sem mapa -> OCR
+            rota='chandra'
+            tipo_pg='fonte-sem-mapa' if _perdidos else 'escaneada'
         elif tem_tabela:
             blocos=blocos_chandra(im_hi, regioes)         # Chandra full-page + data-bbox; YOLO manda em tabela-vs-figura
             rota='chandra'; tipo_pg='organica'
