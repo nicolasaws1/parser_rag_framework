@@ -10,7 +10,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # o que o Colab já traz instalado (sem pip)
 PREINSTALADO = {
-    'os','re','gc','json','time','sys','io','pathlib','subprocess','tempfile','shutil',
+    'os','re','gc','json','time','sys','io','pathlib','subprocess','tempfile','shutil','statistics',
     'collections','itertools','math','random','datetime','typing','warnings','unicodedata',
     'PIL','bs4','numpy','pandas','torch','requests','matplotlib','google','huggingface_hub',
     'transformers','IPython',
@@ -148,11 +148,20 @@ def testar(caminho, fases):
         print(f"❌ {len(problemas)} problema(s):")
         for p in problemas: print("   -", p)
     else:
-        print("✅ nenhum problema — as duas fases rodam na ordem")
+        print("✅ nenhum problema — as células rodam na ordem")
     return problemas
 
 if __name__ == "__main__":
-    NB = r"C:\Users\nicol\OneDrive\Área de Trabalho\SB100\squad-2\extractor\hybrid_mineru_2fases.ipynb"
-    # índices das células de CÓDIGO (não do notebook): 0=config 1=inst1 2=fase1 3=inst2 4=func2 5=fase2
-    # 0=config 1=inst1 2=fase1 | 3=inst2 4=verif 5=funcs2 6=fase2
-    testar(NB, [("FASE 1", [0, 1, 2]), ("FASE 2 (após restart)", [0, 3, 4, 5, 6])])
+    # sem argumento testa o extrator canônico; o de 2 fases (MinerU) foi abandonado
+    padrao = Path(__file__).with_name("hybrid_extractor.ipynb")
+    NB = Path(sys.argv[1]) if len(sys.argv) > 1 else padrao
+    if not NB.exists():
+        sys.exit(f"notebook não encontrado: {NB}")
+    if "2fases" in NB.name:
+        # índices das células de CÓDIGO: 0=config 1=inst1 2=fase1 | 3=inst2 4=verif 5=funcs2 6=fase2
+        fases = [("FASE 1", [0, 1, 2]), ("FASE 2 (após restart)", [0, 3, 4, 5, 6])]
+    else:
+        n = sum(1 for c in json.loads(NB.read_text(encoding="utf-8"))["cells"]
+                if c["cell_type"] == "code")
+        fases = [("execução", list(range(n)))]      # roda de cima a baixo, sem restart
+    sys.exit(1 if testar(str(NB), fases) else 0)
