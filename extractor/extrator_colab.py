@@ -285,13 +285,15 @@ def blocos_chandra(im_hi, regioes=None):
         else:
             md = _div_para_texto(d)
             if md.strip():
-                blocos.append({'tipo': 'texto', 'bbox': bbox, 'md': md})
+                blocos.append({'tipo': 'texto', 'bbox': bbox, 'md': md, 'origem': 'chandra'})
     # FIGURAS pelo YOLO: recorte + Chandra OCR do crop (captura equação DENTRO do gráfico) + subclasse
     for r in [r for r in (regioes or []) if r.get('tipo_rota') == 'figura']:
         mdk = chandra_md(_crop_hi(im_hi, r['bbox']))
         blocos.append({'tipo': classificar_figura(mdk), 'bbox': [round(v,4) for v in r['bbox']],
-                       'md': limpar_figura(mdk), 'conf': round(r.get('conf', 0), 3)})
-    blocos = ordenar_regioes(blocos)                   # ordem por coluna (com as figuras no lugar)
+                       'md': limpar_figura(mdk), 'conf': round(r.get('conf', 0), 3),
+                       'origem': 'chandra-figura'})
+    # aqui a ordenacao geometrica CONTINUA: o Chandra nao garante ordem de leitura
+    blocos = ordenar_regioes(blocos)
     return blocos
 
 def _fracao_coberta(reg, bb):
@@ -331,6 +333,33 @@ def auditar_cobertura(regioes, blocos, fpage=None):
     cobertas = sum(1 for r in regs if r['coberta'] >= 0.30)
     return {'regioes_texto': n, 'cobertas': cobertas,
             'cobertura': round(cobertas/n, 3) if n else 1.0, 'regioes': regs}
+
+def _mesma_coluna(a, b, x_split=0.5):
+    return ((a[0]+a[2])/2 < x_split) == ((b[0]+b[2])/2 < x_split)
+
+def inserir_recuperado(blocos, novo):
+    """Encaixa um bloco recuperado mantendo a ordem de leitura já existente.
+
+    O Docling tem modelo de reading order — reordenar a página inteira por
+    geometria desfaz esse trabalho (numa página com duas zonas de 2 colunas
+    empilhadas, joga o Abstract para depois da Introdução). Aqui a sequência do
+    Docling é a espinha dorsal: o bloco novo entra logo após o último bloco que
+    o precede na MESMA coluna; se não houver, após o último que começa acima."""
+    bn = novo.get('bbox')
+    if not bn:
+        blocos.append(novo); return blocos
+    pos = 0
+    for i, b in enumerate(blocos):
+        bb = b.get('bbox')
+        if not bb: continue
+        if _mesma_coluna(bb, bn) and bb[1] <= bn[1]:
+            pos = i + 1
+    if pos == 0:                                  # nenhuma âncora na mesma coluna
+        for i, b in enumerate(blocos):
+            bb = b.get('bbox')
+            if bb and bb[1] <= bn[1]: pos = i + 1
+    blocos.insert(pos, novo)
+    return blocos
 
 # ── página SEM tabela: Docling (ordem) + rede de segurança PyMuPDF + figura Chandra ──
 def _norm(t): return re.sub(r'\s+',' ',(t or '')).strip().lower()
@@ -388,7 +417,8 @@ def blocos_docling(doc, pno, fpage, itens_pag, regioes, im_hi):
         t=(getattr(it,'text','') or '').strip()
         if not t: continue
         tipo='formula' if getattr(it,'label',None)==DocItemLabel.FORMULA else 'texto'
-        blocos.append({'tipo':tipo,'bbox':_norm_bbox(it.prov[0],pw,ph),'md':limpar_sup_sub(t)})
+        blocos.append({'tipo':tipo,'bbox':_norm_bbox(it.prov[0],pw,ph),'md':limpar_sup_sub(t),
+                       'origem':'docling'})
     # rede de segurança PyMuPDF (dedup robusto: compara com o TEXTO CONCATENADO do Docling,
     # pegando o caso em que o Docling fatiou o mesmo parágrafo em vários itens -> evita duplicata)
     base=_shingles(_canon(" ".join(b.get('md','') for b in blocos)))
@@ -399,13 +429,17 @@ def blocos_docling(doc, pno, fpage, itens_pag, regioes, im_hi):
         if len(nt)<12: continue
         if _novidade(nt, base) < _NOVO_MIN: continue    # não acrescenta nada -> não duplica
         bn=[round(x0/pfw,4),round(y0/pfh,4),round(x1/pfw,4),round(y1/pfh,4)]
-        blocos.append({'tipo':'texto','bbox':bn,'md':limpar_sup_sub(t)}); base|=_shingles(nt)
+        blocos.append({'tipo':'texto','bbox':bn,'md':limpar_sup_sub(t),
+                       'origem':'pymupdf'}); base|=_shingles(nt)
     # figuras via YOLO + Chandra (subtipo)
     for r in [r for r in regioes if r['tipo_rota']=='figura']:
         mdk=chandra_md(_crop_hi(im_hi, r['bbox']))
-        blocos.append({'tipo':classificar_figura(mdk),'bbox':[round(v,4) for v in r['bbox']],'md':limpar_figura(mdk),'conf':round(r['conf'],3)})
-    # ordena por posição (coluna) e reatribui via ordenar_regioes-like
-    blocos = ordenar_regioes(blocos)   # ordem por COLUNA (não zigue-zague de 2 colunas)
+        blocos.append({'tipo':classificar_figura(mdk),'bbox':[round(v,4) for v in r['bbox']],
+                       'md':limpar_figura(mdk),'conf':round(r['conf'],3),'origem':'chandra-figura'})
+    # ordenacao por coluna: coluna esquerda inteira, depois a direita. Verificado na
+    # pagina 2 do bernardi-2022 — inserir por proximidade jogava a figura (topo da
+    # coluna direita) para antes do texto da esquerda, quebrando a leitura.
+    blocos = ordenar_regioes(blocos)
     return blocos
 
 # ── MD p/ o vetor (document.md): super/subscritos unicode -> LaTeX (LOSSLESS, LLM-friendly) ──
