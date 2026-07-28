@@ -150,10 +150,20 @@ def obter_documento(pdf_id: str):
             sb.table("page_images").select("page_number,image_file")
             .eq("pdf_id", pdf_id).order("page_number").execute().data
         )
-    blocos = (
-        sb.table("page_blocks").select("page_number,block_type,markdown_text,bbox,layout")
-        .eq("pdf_id", pdf_id).order("page_number").execute().data
-    )
+    # pagina até esgotar: o PostgREST corta a resposta em 1000 linhas, e um documento
+    # grande (o Boletim 100 tem 5332 blocos) apareceria truncado no site
+    blocos: list[dict] = []
+    passo, inicio = 1000, 0
+    while True:
+        lote = (
+            sb.table("page_blocks").select("page_number,block_type,markdown_text,bbox,layout")
+            .eq("pdf_id", pdf_id).order("page_number")
+            .range(inicio, inicio + passo - 1).execute().data
+        )
+        blocos.extend(lote)
+        if len(lote) < passo:
+            break
+        inicio += passo
     # O Postgres não garante ordem dentro da página, e a ordem de leitura importa:
     # sem isto os blocos saem embaralhados (o título de seção antes do parágrafo que
     # o antecede). O id do bloco ('pN-bM') carrega a posição original.
