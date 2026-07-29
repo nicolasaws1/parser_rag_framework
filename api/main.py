@@ -399,7 +399,8 @@ class EventoLog(BaseModel):
 
 
 EVENTOS = {"login", "logout", "documento_editado", "edicao_descartada",
-           "pdf_ingerido", "pdf_removido", "extracao_solicitada"}
+           "pdf_ingerido", "pdf_removido", "extracao_solicitada",
+           "worker_heartbeat"}
 
 
 def registrar(evento: str, ator=None, alvo=None, detalhe=None, ip=None) -> None:
@@ -481,6 +482,53 @@ def fila_extracao():
     except Exception as e:
         raise HTTPException(503, f"colunas da fila ausentes — aplique "
                                  f"supabase/005_fila_extracao.sql. Detalhe: {e}")
+
+
+# ── estado do worker de extração ─────────────────────────────────────────────
+# O lado com GPU reporta que está vivo e o que está fazendo. Guardado como evento
+# no audit_log — não precisa de tabela nova, e o histórico do worker fica junto
+# com o resto. O estado atual é o último heartbeat.
+
+class Heartbeat(BaseModel):
+    rodando: bool = False
+    gpu: str | None = None
+    documento: str | None = None      # o que está processando agora
+    pagina: int | None = None
+    total_paginas: int | None = None
+    detalhe: dict[str, Any] | None = None
+
+
+@app.post("/api/worker/heartbeat", tags=["extração"])
+def worker_heartbeat(hb: Heartbeat):
+    """Chamado pelo lado GPU. Sem isso, o site mostra 'sem worker conectado'."""
+    registrar("worker_heartbeat", "worker", None, hb.model_dump())
+    return {"ok": True}
+
+
+@app.get("/api/worker", tags=["extração"])
+def worker_estado():
+    """Último heartbeat + há quanto tempo. É o que a página de Extração mostra."""
+    try:
+        r = (sb.table("audit_log").select("detalhe,criado_em")
+             .eq("evento", "worker_heartbeat")
+             .order("criado_em", desc=True).limit(1).execute().data)
+    except Exception:
+        return {"conectado": False, "motivo": "audit_log indisponível"}
+    if not r:
+        return {"conectado": False, "motivo": "nenhum heartbeat recebido"}
+    visto = r[0]["criado_em"]
+    try:
+        idade = (datetime.now(timezone.utc) - datetime.fromisoformat(visto)).total_seconds()
+        # o relógio do banco e o desta máquina não batem exatamente (medi ~163 s de
+        # diferença); sem o piso em zero o "há quantos segundos" saía negativo
+        idade = max(0.0, idade)
+    except Exception:
+        idade = None
+    # 3 min sem sinal = considera fora do ar; o notebook reporta a cada página
+    conectado = idade is not None and idade < 180
+    return {"conectado": conectado, "visto_em": visto,
+            "segundos_desde": int(idade) if idade is not None else None,
+            "estado": r[0]["detalhe"] or {}}
 
 
 @app.get("/api/health", tags=["infra"])

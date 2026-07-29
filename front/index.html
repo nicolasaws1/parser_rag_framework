@@ -318,7 +318,8 @@
   </div>
   <nav class="sb-nav">
     <div class="sb-item ativo" id="nav-home" onclick="irHome()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Home</span></div>
-    <div class="sb-item" id="nav-extract" onclick="irExtracao()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Extração</span></div>
+    <div class="sb-item" id="nav-extract" onclick="irExtracao()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Analisar</span></div>
+    <div class="sb-item" id="nav-gpu" onclick="irExtracaoGPU()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h4M6 14h2M16 10h2M14 14h4"/></svg><span>Extração</span></div>
     <div class="sb-item" style="opacity:.5;cursor:default"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg><span>Qdrant</span></div>
   </nav>
   <div class="sb-plan">
@@ -379,6 +380,20 @@
   </div>
 
   <!-- EXTRACT -->
+
+  <div class="home" id="view-gpu" style="display:none">
+    <div class="hero" style="background:linear-gradient(135deg,#123c20,#1d5c33)">
+      <h1 style="margin:0 0 6px">Extração</h1>
+      <p style="margin:0;opacity:.9;font-size:13.5px;max-width:640px">
+        A extração roda no lado com GPU (DocLayout-YOLO + Chandra OCR 2 + Docling + PyMuPDF).
+        Este servidor não extrai — ele guarda a fila e recebe o estado de quem extrai.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px" id="gpu-cards"></div>
+    <div style="margin-top:20px">
+      <div style="font-weight:700;font-size:14px;margin-bottom:10px">Fila de extração</div>
+      <div id="gpu-fila"></div>
+    </div>
+  </div>
   <div class="extract" id="view-extract">
     <div class="ex-toolbar">
       <span class="ex-back" onclick="irHome()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Voltar</span>
@@ -393,7 +408,7 @@
               style="display:none;margin-left:8px;padding:4px 10px;border:1px solid var(--borda);border-radius:7px;background:#fff;font-size:12px;cursor:pointer">Descartar edição</button>
     </div>
     <div class="ex-split">
-      <div class="pdf-pane" id="pdf-pane"><div class="pdf-wrap" id="pdf-wrap"><img id="pdf-img" alt=""></div></div>
+      <div class="pdf-pane" id="pdf-pane"><div class="pdf-wrap" id="pdf-wrap"><img id="pdf-img" alt=""></div><div id="sem-extracao" style="display:none;align-items:center;justify-content:center;height:100%;padding:40px"><div style="text-align:center;max-width:400px"><div style="font-size:42px;line-height:1;margin-bottom:14px">📄</div><div style="font-weight:700;font-size:15px;margin-bottom:6px">Ainda não extraído</div><div style="font-size:13px;color:var(--cinza);line-height:1.6">O PDF está aprovado e guardado, mas o parser ainda não rodou. Não há páginas nem blocos para mostrar.</div></div></div></div>
       <div class="res-pane">
         <div class="res-tabs">
           <div class="res-tab ativo" id="tab-legivel" onclick="mostrarTab('legivel')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/></svg> Legível</div>
@@ -524,7 +539,9 @@ let filtroCat="todas", filtroSit="todas", ordem="recentes", pontosSessao=0, docA
 const el = id => document.getElementById(id);
 
 /* ── NAV / SIDEBAR ── */
-function setNav(q){ el("nav-home").classList.toggle("ativo",q==="home"); el("nav-extract").classList.toggle("ativo",q==="extract"); }
+function setNav(q){ el("nav-home").classList.toggle("ativo",q==="home");
+  el("nav-extract").classList.toggle("ativo",q==="extract");
+  var g=el("nav-gpu"); if(g) g.classList.toggle("ativo",q==="gpu"); }
 function toggleSidebar(){ document.body.classList.toggle("collapsed"); }
 function irExtracao(){
   let a = docAtual;
@@ -672,14 +689,11 @@ function atualizarSelInfo(){ const n=selecionados.size;
 /* Documento aprovado mas ainda sem extracao: nao ha' pagina nem bloco para
    mostrar. Antes caia aqui e ficava em "Carregando..." para sempre. */
 function mostrarNaoExtraido(d, i){
-  el("pdf-wrap").innerHTML =
-    '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:40px">'+
-    '<div style="text-align:center;max-width:380px">'+
-    '<div style="font-size:40px;line-height:1;margin-bottom:14px">📄</div>'+
-    '<div style="font-weight:700;font-size:15px;margin-bottom:6px">Ainda não extraído</div>'+
-    '<div style="font-size:13px;color:var(--cinza);line-height:1.6">'+
-    'O PDF está aprovado e guardado, mas o parser ainda não rodou. '+
-    'Não há páginas nem blocos para mostrar.</div></div></div>';
+  // mostra a camada de aviso SEM tocar no pdf-wrap: reescrever o innerHTML dele
+  // apagava a <img id="pdf-img"> e quebrava a exibicao de todos os documentos
+  // abertos depois — foi assim que o Boletim 100 apareceu como "nao extraido"
+  el("pdf-wrap").style.display="none";
+  el("sem-extracao").style.display="flex";
   var fila = d.na_fila;
   el("res-legivel").innerHTML =
     '<div style="padding:22px">'+
@@ -690,10 +704,11 @@ function mostrarNaoExtraido(d, i){
       ? '<div style="margin-top:16px;padding:12px 14px;background:#fef3c7;border:1px solid #fde68a;border-radius:9px;font-size:12.5px;color:#92400e">'+
         '<b>Na fila de extração.</b> O lado com GPU consulta a fila e processa; '+
         'o documento aparece extraído quando o resultado for ingerido.</div>'
-      : '<button onclick="pedirExtracao('+i+')" id="btn-extrair-um" '+
-        'style="margin-top:18px;width:100%;padding:11px;border:none;border-radius:10px;'+
-        'background:var(--verde);color:#fff;font-weight:700;font-size:13.5px;cursor:pointer">'+
-        'Solicitar extração</button>')+
+      : '')+
+    '<button onclick="pedirExtracao('+i+')" id="btn-extrair-um" '+
+    'style="margin-top:16px;width:100%;padding:11px;border:none;border-radius:10px;'+
+    'background:'+(fila?'#6b7280':'var(--verde)')+';color:#fff;font-weight:700;font-size:13.5px;cursor:pointer">'+
+    (fila?'Reenviar pedido de extração':'Solicitar extração')+'</button>'+
     '<div style="margin-top:14px;padding:10px 12px;background:#f8f8f8;border:1px solid var(--borda);border-radius:8px;font-size:11.5px;color:var(--cinza);line-height:1.6">'+
     'A extração precisa de GPU e roda no notebook (DocLayout-YOLO + Chandra OCR 2 + '+
     'Docling + PyMuPDF). Este servidor não extrai — ele registra o pedido.</div></div>';
@@ -766,7 +781,7 @@ function analisarUm(i){
 }
 
 /* ── HOME/EXTRACT switch ── */
-function irHome(){ el("view-home").style.display="block"; el("view-extract").style.display="none"; el("topbar-tit").textContent="Home"; setNav("home"); renderHome(); }
+function irHome(){ el("view-home").style.display="block"; el("view-extract").style.display="none"; el("view-gpu").style.display="none"; el("topbar-tit").textContent="Home"; setNav("home"); renderHome(); }
 
 function refletirEdicao(lay){
   var b=el("btn-descartar");
@@ -776,8 +791,8 @@ function refletirEdicao(lay){
 async function abrirDoc(i){
   docAtual=i;   // abrir NAO extrai: quem marca extraido e' o banco, na ingestao
   const d=IDX[i];
-  el("view-home").style.display="none"; el("view-extract").style.display="flex";
-  el("topbar-tit").textContent="Extração"; el("ex-filename").textContent=d.arquivo; setNav("extract");
+  el("view-home").style.display="none"; el("view-gpu").style.display="none"; el("view-extract").style.display="flex";
+  el("topbar-tit").textContent="Analisar"; el("ex-filename").textContent=d.arquivo; setNav("extract");
   paginaAtual=1; legFiltro="tudo";
   if(!d.extraido){ mostrarNaoExtraido(d, i); return; }
   el("res-legivel").innerHTML='<div class="md-vazio">Carregando…</div>';
@@ -807,6 +822,8 @@ async function garantirBlocos(pg){
   return pg;
 }
 async function renderPagina(){
+  el("pdf-wrap").style.display="";           // desfaz a camada de "nao extraido"
+  el("sem-extracao").style.display="none";
   const d=IDX[docAtual], pags=paginasDoAtual();
   const pg = pags[paginaAtual-1];
   if(pg && pg.blocos===null){
@@ -977,6 +994,54 @@ window.addEventListener("beforeunload", function(e){
 });
 
 
+
+/* ── Extração: estado de quem extrai ──
+   Este servidor nao extrai. Aqui aparece o que o lado GPU reporta
+   (POST /api/worker/heartbeat) e o que esta' na fila esperando. */
+var _tGpu=null;
+function irExtracaoGPU(){
+  el("view-home").style.display="none"; el("view-extract").style.display="none";
+  el("view-gpu").style.display="block";
+  el("topbar-tit").textContent="Extração"; setNav("gpu");
+  atualizarGPU();
+  clearInterval(_tGpu); _tGpu=setInterval(atualizarGPU, 15000);   // heartbeat e' periodico
+}
+function _card(tit, corpo, cor){
+  return '<div style="background:#fff;border:1px solid var(--borda);border-left:4px solid '+cor+
+         ';border-radius:12px;padding:16px 18px"><div style="font-size:11px;font-weight:700;'+
+         'letter-spacing:.6px;text-transform:uppercase;color:var(--cinza);margin-bottom:8px">'+tit+
+         '</div>'+corpo+'</div>';
+}
+async function atualizarGPU(){
+  if(el("view-gpu").style.display==="none"){ clearInterval(_tGpu); return; }
+  var w={conectado:false}, fila=[];
+  try{ w=await (await fetch(API+"/worker")).json(); }catch(e){ w={conectado:false,motivo:e.message}; }
+  try{ fila=await (await fetch(API+"/fila")).json(); }catch(e){ fila=[]; }
+  var est=w.estado||{};
+  var cor = w.conectado ? (est.rodando?"#15803d":"#0369a1") : "#b45309";
+  var titulo = w.conectado ? (est.rodando?"Extraindo agora":"Conectado, ocioso") : "Sem worker conectado";
+  var corpoW='<div style="font-size:19px;font-weight:800;color:'+cor+'">'+titulo+'</div>';
+  if(w.conectado){
+    corpoW+='<div style="font-size:12.5px;color:var(--cinza);margin-top:7px;line-height:1.7">'+
+      (est.gpu?'GPU: <b>'+esc(est.gpu)+'</b><br>':'')+
+      (est.documento?'Documento: '+esc(String(est.documento).slice(0,42))+'<br>':'')+
+      (est.pagina?'Página '+est.pagina+(est.total_paginas?' de '+est.total_paginas:'')+'<br>':'')+
+      'Último sinal há '+(w.segundos_desde||0)+'s</div>';
+  } else {
+    corpoW+='<div style="font-size:12.5px;color:var(--cinza);margin-top:7px;line-height:1.7">'+
+      esc(w.motivo||'nenhum sinal nos últimos 3 minutos')+'.<br>'+
+      'O script de extração não está reportando. Isso é o esperado quando o notebook não está rodando.</div>';
+  }
+  var corpoF='<div style="font-size:34px;font-weight:800;line-height:1">'+fila.length+'</div>'+
+    '<div style="font-size:12.5px;color:var(--cinza);margin-top:4px">documento(s) aguardando extração</div>';
+  el("gpu-cards").innerHTML=_card("Worker de extração",corpoW,cor)+_card("Fila",corpoF,"#6b7280");
+  el("gpu-fila").innerHTML = fila.length
+    ? '<table class="log-t"><thead><tr><th>Documento</th><th>Páginas</th><th>Pedido em</th><th>Por</th></tr></thead><tbody>'+
+      fila.map(function(x){ return '<tr><td>'+esc(x.pdf_file)+'</td><td>'+(x.total_pages||0)+'</td>'+
+        '<td>'+_quando(x.extraction_requested_at)+'</td><td>'+esc(x.extraction_requested_by||"—")+'</td></tr>'; }).join("")+
+      '</tbody></table>'
+    : '<div class="md-vazio">Nada na fila. Peça a extração de um documento na Home ou ao abri-lo.</div>';
+}
 /* ── Histórico e Configs ────────────────────────────────────────────────────
    O histórico é o log do servidor: entrada/saída, alteração de documento e o
    que entrou no acervo. O "ator" é o que a pessoa digitou no login — enquanto
