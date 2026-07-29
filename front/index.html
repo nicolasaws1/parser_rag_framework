@@ -58,7 +58,7 @@
   .home-hero h2{font-size:26px;font-weight:700;position:relative;}
   .home-hero p{font-size:14px;opacity:.9;margin-top:6px;max-width:600px;position:relative;}
   .home-badges{display:flex;gap:26px;margin-top:20px;position:relative;}
-  .home-badge .n{font-size:32px;font-weight:700;line-height:1;}
+  .home-badge .n{font-size:clamp(20px,2.2vw,30px);font-size:32px;font-weight:700;line-height:1;}
   .home-badge .l{font-size:11px;letter-spacing:.6px;opacity:.85;text-transform:uppercase;margin-top:4px;}
 
   .lista-topo{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px;flex-wrap:wrap;}
@@ -630,9 +630,12 @@ function setView(mode){
   renderHome();
 }
 function renderHome(){
-  el("badge-total").textContent = IDX.length;
-  el("badge-ext").textContent = extraidos.size;
-  el("badge-vet").textContent = vetorizados.size;
+  // parte/total em cada etapa: o denominador dos aprovados e' quanto a curadoria
+  // tem (da ultima checagem, sem bater na API); nas outras, quanto ha' no banco
+  var noBanco=IDX.length;
+  el("badge-total").textContent = TOTAL_CURADORIA ? (noBanco+"/"+TOTAL_CURADORIA) : String(noBanco);
+  el("badge-ext").textContent   = extraidos.size+"/"+noBanco;
+  el("badge-vet").textContent   = vetorizados.size+"/"+noBanco;
   const lista = el("lista"); lista.innerHTML="";
   lista.className = "lista" + (viewMode==="grade" ? " grade" : "");
   el("view-home").classList.toggle("grade-mode", viewMode==="grade");
@@ -1057,8 +1060,9 @@ async function mostrarUltimaSync(){
     var r=await fetch(API+"/curadoria/ultima");
     if(!r.ok){ el_.textContent=""; return; }
     var j=await r.json();
-    if(j.nunca){ el_.textContent="nunca sincronizado"; return; }
+    if(j.nunca){ el_.textContent="nunca sincronizado — clique em Buscar novos"; return; }
     var res=j.resumo||{};
+    if(res.aprovados){ TOTAL_CURADORIA=res.aprovados; renderHome(); }
     el_.textContent="última checagem "+_quando(j.quando)+
       (res.novos!=null ? " · "+res.novos+" novo(s) na curadoria" : "");
   }catch(e){ el_.textContent=""; }
@@ -1093,7 +1097,7 @@ async function sincronizarCuradoria(){
    O histórico é o log do servidor: entrada/saída, alteração de documento e o
    que entrou no acervo. O "ator" é o que a pessoa digitou no login — enquanto
    a autenticação for protótipo, ele não prova identidade. */
-var USUARIO = null;
+var USUARIO = null, TOTAL_CURADORIA = 0;
 var EV_ROTULO = {
   login:              ["entrou",                "#166534", "#dcfce7"],
   logout:             ["saiu",                  "#7c2d12", "#ffedd5"],
