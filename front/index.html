@@ -354,6 +354,10 @@
     <div class="lista-topo">
       <div class="filtros" id="filtros"><span class="filtro-lbl">Categoria:</span></div>
       <div class="filtros" id="filtros-sit"><span class="filtro-lbl">Situação:</span></div>
+      <div class="filtros">
+        <button id="btn-sync" onclick="sincronizarCuradoria()" class="filtro" title="Consulta a API da Squad 1 e vê se há documentos novos">Buscar novos</button>
+        <span id="sync-quando" style="font-size:11.5px;color:var(--cinza)"></span>
+      </div>
       <div class="filtros"><span class="filtro-lbl">Ordenar:</span>
         <select id="ordem" onchange="mudarOrdem(this.value)" class="sel-ordem">
           <option value="recentes">Recém-adicionados</option>
@@ -1042,6 +1046,49 @@ async function atualizarGPU(){
         '<div style="padding-right:16px"><span class="mini-chip fila">na fila</span></div></div>'; }).join("")
     : '<div class="md-vazio">Nada na fila. Peça a extração de um documento na Home ou ao abri-lo.</div>';
 }
+
+/* ── curadoria (Squad 1) ──
+   A API so' e' consultada quando se clica: bater nela a cada visita custaria ~250
+   registros por pageview sem necessidade. Ao abrir, o site mostra apenas QUANDO
+   foi a ultima checagem, lida do historico. */
+async function mostrarUltimaSync(){
+  var el_=el("sync-quando"); if(!el_) return;
+  try{
+    var r=await fetch(API+"/curadoria/ultima");
+    if(!r.ok){ el_.textContent=""; return; }
+    var j=await r.json();
+    if(j.nunca){ el_.textContent="nunca sincronizado"; return; }
+    var res=j.resumo||{};
+    el_.textContent="última checagem "+_quando(j.quando)+
+      (res.novos!=null ? " · "+res.novos+" novo(s) na curadoria" : "");
+  }catch(e){ el_.textContent=""; }
+}
+async function sincronizarCuradoria(){
+  var b=el("btn-sync"); if(b.disabled) return;
+  b.disabled=true; var antes=b.textContent; b.textContent="Consultando…";
+  try{
+    var r=await fetch(API+"/curadoria/sincronizar",{method:"POST"});
+    var j=await r.json();
+    if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    var lista = (j.novos_exemplos||[]).map(function(n){
+      return '<li style="margin:2px 0">'+esc(n)+'</li>'; }).join("");
+    abrirPainel("Curadoria — "+j.na_api+" artigos na API",
+      '<div style="font-size:13px;line-height:1.9">'+
+      '<div><b>'+j.aprovados+'</b> aprovados (não rejeitados)</div>'+
+      '<div><b>'+j.ja_conhecidos+'</b> já no banco — metadados atualizados: <b>'+j.atualizados+'</b></div>'+
+      '<div><b>'+j.novos+'</b> na curadoria e ainda não no banco</div></div>'+
+      (lista?'<div style="margin-top:12px;font-size:12.5px"><b>Novos:</b><ul style="margin:6px 0 0 18px;padding:0">'+lista+
+        (j.novos>25?'<li style="color:var(--cinza)">… e outros '+(j.novos-25)+'</li>':'')+'</ul></div>':'')+
+      '<div style="margin-top:14px;padding:10px 12px;background:#f8f8f8;border:1px solid var(--borda);border-radius:8px;font-size:11.5px;color:var(--cinza);line-height:1.6">'+
+      'Isto atualiza os <b>metadados</b> do que já está no banco e lista o que apareceu na curadoria. '+
+      'Registrar um documento novo depende do PDF em si, que vem por outro caminho.</div>');
+    await carregarDocumentos(); renderHome(); mostrarUltimaSync();
+  }catch(e){
+    abrirPainel("Não deu para sincronizar",
+      '<p style="font-size:13px">'+esc(String(e.message||e))+'</p>'+
+      '<div style="margin-top:10px;font-size:12px;color:var(--cinza)">A API de curadoria pode estar fora do ar. Os documentos já no banco continuam disponíveis.</div>');
+  }finally{ b.disabled=false; b.textContent=antes; }
+}
 /* ── Histórico e Configs ────────────────────────────────────────────────────
    O histórico é o log do servidor: entrada/saída, alteração de documento e o
    que entrou no acervo. O "ator" é o que a pessoa digitou no login — enquanto
@@ -1504,6 +1551,7 @@ function entrar(e){
 
 async function iniciar(){
   el("lista").innerHTML='<div class="md-vazio">Carregando documentos…</div>';
+  mostrarUltimaSync();
   try{ await carregarDocumentos(); }
   catch(e){
     el("lista").innerHTML='<div class="md-vazio">Não foi possível falar com a API ('

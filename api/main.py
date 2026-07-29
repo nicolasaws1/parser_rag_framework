@@ -400,7 +400,7 @@ class EventoLog(BaseModel):
 
 EVENTOS = {"login", "logout", "documento_editado", "edicao_descartada",
            "pdf_ingerido", "pdf_removido", "extracao_solicitada",
-           "worker_heartbeat"}
+           "worker_heartbeat", "metadados_sincronizados"}
 
 
 def registrar(evento: str, ator=None, alvo=None, detalhe=None, ip=None) -> None:
@@ -529,6 +529,41 @@ def worker_estado():
     return {"conectado": conectado, "visto_em": visto,
             "segundos_desde": int(idade) if idade is not None else None,
             "estado": r[0]["detalhe"] or {}}
+
+
+# ── curadoria (Squad 1) ──────────────────────────────────────────────────────
+# A consulta a' API e' SOB DEMANDA, por botao no site: bater nela a cada visita
+# custaria ~250 registros por pageview sem necessidade. O resultado da ultima
+# sincronizacao fica no audit_log, e e' o que o site mostra ao abrir.
+
+@app.get("/api/curadoria/ultima", tags=["curadoria"])
+def curadoria_ultima():
+    """Quando foi a última sincronização e o que ela achou."""
+    try:
+        r = (sb.table("audit_log").select("detalhe,criado_em,ator")
+             .eq("evento", "metadados_sincronizados")
+             .order("criado_em", desc=True).limit(1).execute().data)
+    except Exception:
+        return {"nunca": True}
+    if not r:
+        return {"nunca": True}
+    return {"nunca": False, "quando": r[0]["criado_em"],
+            "por": r[0].get("ator"), "resumo": r[0]["detalhe"] or {}}
+
+
+@app.post("/api/curadoria/sincronizar", tags=["curadoria"])
+def curadoria_sincronizar(pedido: Request, gravar: bool = True):
+    """Consulta a API de curadoria e atualiza os metadados. Acionado pelo botão."""
+    limitar(pedido, "edicao", "curadoria")      # a API de fora nao aguenta laco
+    try:
+        from api import curadoria
+        resumo = curadoria.sincronizar(sb, gravar=gravar)
+    except Exception as e:
+        raise HTTPException(502, f"não deu para falar com a API de curadoria: {e}")
+    registrar("metadados_sincronizados", "site", None,
+              {k: v for k, v in resumo.items() if k != "novos_exemplos"},
+              pedido.client.host if pedido.client else None)
+    return resumo
 
 
 @app.get("/api/health", tags=["infra"])
