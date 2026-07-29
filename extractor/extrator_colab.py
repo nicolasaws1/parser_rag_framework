@@ -284,11 +284,17 @@ def blocos_chandra(im_hi, regioes=None):
             coords.append(v if len(v) == 4 else None)
         except Exception:
             coords.append(None)
-    allx = [x for c in coords if c for x in (c[0], c[2])]
-    ally = [y for c in coords if c for y in (c[1], c[3])]
-    MX = (min(allx) + max(allx)) if allx else 1.0   # margem esquerda ≈ direita (preserva margem)
-    MY = (min(ally) + max(ally)) if ally else 1.0   # margem topo ≈ base
-    MX = MX or 1.0; MY = MY or 1.0
+    # O Chandra devolve o data-bbox em 0-1000 normalizado — medido contra a
+    # geometria real do PDF nas pags. 6 e 7 do Boletim 100:
+    #     /1000            x 0.166..0.830  y 0.116..0.832   <- bate
+    #     verdade (PDF)    x 0.171..0.834  y 0.121..0.833
+    # A versao anterior chutava a escala somando min+max, supondo o conteudo
+    # centralizado na pagina (margem de cima = margem de baixo). Quando a pagina
+    # tem muito espaco vazio embaixo — folha de rosto, fim de capitulo — a
+    # suposicao quebra e o erro CRESCE conforme desce a pagina: a caixa do topo
+    # fica certa e as de baixo saem deslocadas quase uma linha (y ia a 0.878
+    # onde o texto acaba em 0.833).
+    MX = MY = 1000.0
     figs = [r['bbox'] for r in (regioes or []) if r.get('tipo_rota') == 'figura']  # YOLO manda em figura
     blocos = []
     for d, v in zip(divs, coords):
