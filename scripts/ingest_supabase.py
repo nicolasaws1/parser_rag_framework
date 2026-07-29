@@ -29,7 +29,21 @@ load_dotenv()
 sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
 
 ROOT = Path(__file__).resolve().parent.parent
-PDF_DIR = Path.home() / "Downloads"      # PDFs originais
+
+# onde procurar o PDF original (para subir ao bucket). Aceita PDF_DIR no ambiente;
+# senão tenta os lugares onde os PDFs aprovados costumam estar.
+PDF_DIRS = ([Path(os.environ["PDF_DIR"])] if os.environ.get("PDF_DIR") else []) + [
+    Path.home() / "OneDrive" / "Área de Trabalho" / "SB100" / "PDFS aprovados",
+    Path.home() / "Downloads",
+]
+
+
+def achar_pdf(nome: str) -> Path | None:
+    for d in PDF_DIRS:
+        p = d / nome
+        if p.exists():
+            return p
+    return None
 PIPELINE = "hibrido: DocLayout-YOLO + Chandra OCR 2 + Docling + PyMuPDF"
 FORCE = "--force" in sys.argv
 
@@ -85,11 +99,11 @@ def ingest_doc(entry: dict) -> None:
         print(f"    ♻️  {slug}: registro anterior removido (--force)")
 
     # 1) PDF original -> bucket "pdfs"
-    pdf_local = PDF_DIR / entry["arquivo"]
-    if pdf_local.exists():
+    pdf_local = achar_pdf(entry["arquivo"])
+    if pdf_local:
         _upload("pdfs", pdf_path, pdf_local, "application/pdf")
     else:
-        print(f"    ⚠️  PDF original não encontrado ({pdf_local.name}); registro segue sem o binário")
+        print(f"    ⚠️  PDF original não encontrado ({entry['arquivo'][:44]}); registro segue sem o binário")
 
     # 2) tabela pdfs
     tempo_ms = _int(round((lay.get("tempo_s") or 0) * 1000), None) or None

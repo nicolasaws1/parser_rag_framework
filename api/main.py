@@ -12,12 +12,14 @@ Rodar:
 import os
 import re
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from supabase import create_client
 
 load_dotenv()
@@ -122,8 +124,9 @@ def listar_documentos():
 
 
 @app.get("/api/document/{pdf_id}", tags=["documentos"])
-def obter_documento(pdf_id: str):
+def obter_documento(pdf_id: str, pedido: Request):
     """Documento completo para a tela de Extração: páginas, imagens e blocos (bbox + markdown)."""
+    limitar(pedido, "leitura", pdf_id)
     try:
         UUID(pdf_id)
     except ValueError:
@@ -193,12 +196,124 @@ def obter_documento(pdf_id: str):
         for img in imgs
     ]
 
+    # se houver edição manual, ela substitui o que a extração produziu; o original
+    # continua intacto no banco e volta assim que a edição for descartada
+    ed = _edicao_de(pdf_id)
+    if ed and ed.get("layout"):
+        por_n = {p["n"]: p for p in ed["layout"] if isinstance(p, dict) and "n" in p}
+        for pg in paginas:
+            e = por_n.get(pg["n"])
+            if e and e.get("blocos") is not None:
+                pg["blocos"] = e["blocos"]
+
     return {
         **pdf,
         "meta": meta[0] if meta else {},
         "paginas": paginas,
-        "total_blocos": len(blocos),
+        "total_blocos": sum(len(p["blocos"]) for p in paginas),
+        "editado": bool(ed),
+        "edited_at": (ed or {}).get("edited_at"),
+        "markdown": (ed or {}).get("markdown") or pdf.get("markdown"),
     }
+
+
+# ── edição manual ────────────────────────────────────────────────────────────
+# A extração original é imutável (pdfs.markdown, page_blocks). Cada documento tem
+# NO MÁXIMO UMA linha em document_edits, sobrescrita a cada alteração — sem
+# histórico e sem cópias novas, conforme decidido. `edited_at` diz quando foi a
+# última. Ver supabase/002_edicoes.sql.
+
+class Edicao(BaseModel):
+    """`layout` traz SÓ as páginas alteradas — o servidor funde no que já existe."""
+    layout: list[dict[str, Any]] | None = None
+    markdown: str | None = None
+    edited_by: str | None = None
+
+
+# Por (cliente, documento): 5 edições/min e 5 leituras/min. Segura engano (script
+# em laço) e abuso, já que o login do front ainda não autentica de verdade.
+# Em memória: com mais de um worker do uvicorn o limite vale por worker — quando
+# for para produção com vários, trocar por Redis ou pelo rate limit do proxy.
+LIMITES = {"edicao": 5, "leitura": 5}
+_JANELA = 60.0
+_marcas: dict[tuple, list[float]] = {}
+
+
+def limitar(pedido: Request, chave: str, alvo: str) -> None:
+    from time import monotonic
+    quem = (pedido.client.host if pedido.client else "?", chave, alvo)
+    agora = monotonic()
+    marcas = [t for t in _marcas.get(quem, []) if agora - t < _JANELA]
+    if len(marcas) >= LIMITES[chave]:
+        espera = int(_JANELA - (agora - marcas[0])) + 1
+        _marcas[quem] = marcas
+        raise HTTPException(429, f"limite de {LIMITES[chave]} por minuto atingido "
+                                 f"para este documento; tente em {espera}s",
+                            headers={"Retry-After": str(espera)})
+    marcas.append(agora)
+    _marcas[quem] = marcas
+
+
+def _edicao_de(pdf_id: str) -> dict | None:
+    """Edição do documento, se houver. Devolve None se a tabela ainda não existe."""
+    try:
+        r = sb.table("document_edits").select("*").eq("pdf_id", pdf_id).execute().data
+        return r[0] if r else None
+    except Exception:
+        return None            # migração 002 ainda não aplicada
+
+
+@app.get("/api/document/{pdf_id}/edicao", tags=["edição"])
+def obter_edicao(pdf_id: str):
+    """Metadados da edição: se existe e quando foi feita."""
+    e = _edicao_de(pdf_id)
+    if not e:
+        return {"editado": False}
+    return {"editado": True, "edited_at": e.get("edited_at"),
+            "edited_by": e.get("edited_by"),
+            "tem_layout": e.get("layout") is not None,
+            "tem_markdown": e.get("markdown") is not None}
+
+
+@app.put("/api/document/{pdf_id}/edicao", tags=["edição"])
+def salvar_edicao(pdf_id: str, edicao: Edicao, pedido: Request):
+    """Grava a edição, SOBRESCREVENDO a anterior. O original não é tocado.
+
+    Continua sendo UMA linha por documento: as páginas recebidas são fundidas nas
+    que já estavam guardadas, e `edited_at` passa a ser o momento desta gravação.
+    """
+    if not sb.table("pdfs").select("id").eq("id", pdf_id).execute().data:
+        raise HTTPException(404, "PDF não encontrado")
+    limitar(pedido, "edicao", pdf_id)
+    if edicao.layout is None and edicao.markdown is None:
+        raise HTTPException(400, "envie 'layout' e/ou 'markdown'")
+    linha = {"pdf_id": pdf_id, "edited_by": edicao.edited_by}
+    if edicao.layout is not None:
+        anterior = _edicao_de(pdf_id) or {}
+        paginas = {p["n"]: p for p in (anterior.get("layout") or []) if "n" in p}
+        for p in edicao.layout:
+            if "n" not in p:
+                raise HTTPException(400, "cada página precisa do campo 'n'")
+            paginas[p["n"]] = p
+        linha["layout"] = [paginas[n] for n in sorted(paginas)]
+    if edicao.markdown is not None:
+        linha["markdown"] = edicao.markdown
+    try:
+        sb.table("document_edits").upsert(linha, on_conflict="pdf_id").execute()
+    except Exception as e:
+        raise HTTPException(503, f"tabela document_edits indisponível — aplique "
+                                 f"supabase/002_edicoes.sql. Detalhe: {e}")
+    return obter_edicao(pdf_id)
+
+
+@app.delete("/api/document/{pdf_id}/edicao", tags=["edição"])
+def descartar_edicao(pdf_id: str):
+    """Joga fora a edição e volta ao que a extração produziu."""
+    try:
+        sb.table("document_edits").delete().eq("pdf_id", pdf_id).execute()
+    except Exception as e:
+        raise HTTPException(503, f"tabela document_edits indisponível: {e}")
+    return {"editado": False}
 
 
 @app.get("/api/health", tags=["infra"])

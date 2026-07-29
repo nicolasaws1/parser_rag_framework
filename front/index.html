@@ -362,6 +362,9 @@
       <span class="ex-zoom"><button onclick="zoomPdf(-15)" title="Menos zoom">−</button><span id="zoom-lbl">100%</span><button onclick="zoomPdf(15)" title="Mais zoom">+</button><button onclick="zoomReset()" title="Resetar zoom">⟲</button></span>
       <span class="sp"></span>
       <span style="color:var(--cinza)">Passe o mouse no texto ou no PDF — os dois se destacam</span>
+      <span id="edicao-estado" style="display:none;align-items:center;gap:5px;font-size:12px;font-weight:600;margin-left:10px"></span>
+      <button id="btn-descartar" onclick="descartarEdicao()" title="Volta ao texto que a extração produziu"
+              style="display:none;margin-left:8px;padding:4px 10px;border:1px solid var(--borda);border-radius:7px;background:#fff;font-size:12px;cursor:pointer">Descartar edição</button>
     </div>
     <div class="ex-split">
       <div class="pdf-pane" id="pdf-pane"><div class="pdf-wrap" id="pdf-wrap"><img id="pdf-img" alt=""></div></div>
@@ -474,7 +477,8 @@ async function carregarDoc(i){
     blocos:p.blocos||[], counts:_counts(p.blocos||[])
   }));
   DOCS[d.slug] = { slug:d.slug, n_paginas:d.n_paginas, meta:d.meta,
-                   paginas:paginas, resumo:_resumo(paginas) };
+                   paginas:paginas, resumo:_resumo(paginas),
+                   editado:!!doc.editado, editado_em:doc.editado_em||doc.edited_at||null };
   return DOCS[d.slug];
 }
 
@@ -619,6 +623,11 @@ function analisarUm(i){
 /* ── HOME/EXTRACT switch ── */
 function irHome(){ el("view-home").style.display="block"; el("view-extract").style.display="none"; el("topbar-tit").textContent="Home"; setNav("home"); renderHome(); }
 
+function refletirEdicao(lay){
+  var b=el("btn-descartar");
+  if(b) b.style.display = (lay && lay.editado) ? "inline-block" : "none";
+  if(lay && lay.editado) marcarEstado("salvo", lay.editado_em); else marcarEstado("");
+}
 async function abrirDoc(i){
   docAtual=i; extraidos.add(i);
   const d=IDX[i];
@@ -629,6 +638,7 @@ async function abrirDoc(i){
   try{ await carregarDoc(i); }
   catch(e){ el("res-legivel").innerHTML='<div class="md-vazio">Erro ao carregar: '+esc(e.message)+'</div>'; return; }
   renderPagina(); renderMeta(d); mostrarTab("legivel"); ligarHover(); resetVetFoot(i); zoomReset();
+  refletirEdicao(DOCS[d.slug]);
 }
 
 /* ── EXTRACT: página (imagem + overlays) + markdown ── */
@@ -725,7 +735,79 @@ function salvarEdicao(id, texto, origem){
   var b=findBloco(id); if(!b) return;
   b.md = (texto||"").trim();
   if(origem==="md") renderLegivel(_pgAtual); else renderMD(_pgAtual);
+  persistir();
 }
+
+/* ── grava no servidor ──
+   Antes a edição só existia na memória da página: um F5 e ela sumia. Agora vai
+   para PUT /api/document/{id}/edicao, que mantém UM arquivo de edição por
+   documento, sobrescrito — o resultado da extração continua intacto embaixo.
+   Manda o layout inteiro porque é o que o servidor guarda; o debounce evita uma
+   requisição por tecla quando se edita vários blocos seguidos. */
+var _tPersist=null, _persistPend=false, _pgsSujas=new Set();
+function persistir(pg){
+  if(docAtual===null) return;
+  var n=(pg&&pg.n)||(_pgAtual&&_pgAtual.n); if(n) _pgsSujas.add(n);
+  _persistPend=true; marcarEstado("pendente");
+  clearTimeout(_tPersist);
+  _tPersist=setTimeout(enviarEdicao, 800);
+}
+async function enviarEdicao(){
+  if(docAtual===null) return;
+  var d=IDX[docAtual], lay=DOCS[d.slug]; if(!lay) return;
+  // manda so' as paginas mexidas: o layout inteiro do Boletim 100 da' 2,3 MB
+  var sujas=_pgsSujas;
+  var corpo={ layout:(lay.paginas||[]).filter(function(p){ return sujas.has(p.n); })
+                                      .map(function(p){ return {n:p.n, blocos:p.blocos||[]}; }) };
+  if(!corpo.layout.length){ _persistPend=false; marcarEstado(""); return; }
+  marcarEstado("salvando");
+  try{
+    var r=await fetch(API+"/document/"+d.id+"/edicao",
+      {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(corpo)});
+    if(r.status===429){
+      var espera=parseInt(r.headers.get("Retry-After")||"20",10);
+      marcarEstado("espera", espera);
+      _tPersist=setTimeout(enviarEdicao, (espera+1)*1000);   // reenvia sozinho
+      return;
+    }
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    var j=await r.json();
+    _persistPend=false; _pgsSujas.clear();
+    marcarEstado("salvo", j.editado_em||j.edited_at);
+  }catch(e){
+    marcarEstado("erro", String(e.message||e));
+  }
+}
+async function descartarEdicao(){
+  if(docAtual===null) return;
+  var d=IDX[docAtual];
+  if(!confirm("Descartar as alterações e voltar ao texto que a extração produziu?")) return;
+  try{
+    var r=await fetch(API+"/document/"+d.id+"/edicao",{method:"DELETE"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    delete DOCS[d.slug];                 // força recarregar do servidor
+    marcarEstado("");
+    await abrirDoc(docAtual);
+  }catch(e){ marcarEstado("erro", String(e.message||e)); }
+}
+function marcarEstado(estado, extra){
+  var el_=el("edicao-estado"); if(!el_) return;
+  var mapa={
+    pendente:["alteração não salva","#b45309"],
+    salvando:["salvando…","#6b7280"],
+    salvo:["salvo"+(extra?" às "+String(extra).slice(11,16):""),"#15803d"],
+    espera:["limite atingido — salva em "+extra+"s","#b45309"],
+    erro:["não salvou: "+(extra||""),"#b91c1c"]
+  };
+  var m=mapa[estado];
+  el_.style.display = m ? "inline-flex" : "none";
+  if(m){ el_.textContent=m[0]; el_.style.color=m[1]; }
+  el_.dataset.estado = estado || "";
+}
+/* avisa antes de sair com edição pendente */
+window.addEventListener("beforeunload", function(e){
+  if(_persistPend){ e.preventDefault(); e.returnValue=""; }
+});
 
 /* ── metadados ── */
 
@@ -894,7 +976,7 @@ function adicionarBlocoMD(afterId){
   var novo={ tipo:"texto", md:"Novo trecho — clique 2× para editar", id:"add-"+Date.now(), bbox:null, _novo:true };
   var idx=-1; if(afterId){ for(var i=0;i<pg.blocos.length;i++){ if(pg.blocos[i].id===afterId){ idx=i; break; } } }
   if(idx>=0) pg.blocos.splice(idx+1,0,novo); else pg.blocos.push(novo);
-  renderMD(pg); renderLegivel(pg);
+  renderMD(pg); renderLegivel(pg); persistir(pg);
   setTimeout(function(){
     var alvo=el("res-md").querySelector('.md-block[data-id="'+novo.id+'"] .md-content');
     if(alvo){ alvo.scrollIntoView({block:"center"}); alvo.dispatchEvent(new MouseEvent("dblclick",{bubbles:true})); }
@@ -907,7 +989,7 @@ function excluirBloco(id){
   for(var i=0;i<pgs.length;i++){ var bs=pgs[i].blocos||[];
     for(var j=0;j<bs.length;j++){ if(bs[j].id===id){ bs.splice(j,1); i=pgs.length; break; } } }
   var ov=document.querySelector('#pdf-wrap .bbox[data-id="'+id+'"]'); if(ov) ov.remove();
-  renderMD(pg); renderLegivel(pg);
+  renderMD(pg); renderLegivel(pg); persistir(pg);
 }
 function initMdCtx(){
   if(window._mdCtxInit) return; window._mdCtxInit=true;
