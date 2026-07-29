@@ -151,6 +151,8 @@
   .log-ev{display:inline-block;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;}
   .cfg-l{display:flex;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid #f1f1f1;font-size:13px;}
   .cfg-l span:first-child{color:var(--cinza);}
+  .sel-ordem{border:1px solid var(--borda);border-radius:20px;padding:5px 10px;font-size:12px;font-weight:600;background:#fff;cursor:pointer;color:#1a1a1a;font-family:inherit;}
+  .sel-ordem:focus{outline:2px solid var(--verde);outline-offset:1px;}
   /* login (antes da home) */
   .login-overlay{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--verde) 0%,#123c20 100%);padding:20px;}
   .login-card{width:100%;max-width:360px;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:34px 30px;text-align:center;}
@@ -347,6 +349,16 @@
     </div>
     <div class="lista-topo">
       <div class="filtros" id="filtros"><span class="filtro-lbl">Categoria:</span></div>
+      <div class="filtros" id="filtros-sit"><span class="filtro-lbl">Situação:</span></div>
+      <div class="filtros"><span class="filtro-lbl">Ordenar:</span>
+        <select id="ordem" onchange="mudarOrdem(this.value)" class="sel-ordem">
+          <option value="recentes">Recém-adicionados</option>
+          <option value="antigos">Mais antigos</option>
+          <option value="maiores">Maiores (páginas)</option>
+          <option value="menores">Menores (páginas)</option>
+          <option value="titulo">Título (A–Z)</option>
+        </select>
+      </div>
       <div class="acoes">
         <div class="view-toggle"><button class="vbtn ativo" id="vb-lista" onclick="setView('lista')" title="Lista"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button><button class="vbtn" id="vb-grade" onclick="setView('grade')" title="Grade"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button></div>
         <span class="sel-info" id="sel-info">Nenhum selecionado</span>
@@ -473,8 +485,13 @@ async function carregarDocumentos(){
     id:d.id, slug:_slugDe(d.pdf_file), arquivo:d.pdf_file,
     n_paginas:d.total_pages||0, meta:_meta(d.meta), thumb:d.thumbnail||"",
     resumo:d.resumo||{tabelas:0,figuras:0,formulas:0},
-    aprovado:d.approved, extraido:d.extracted, vetorizado:d.vectorized
+    aprovado:d.approved, extraido:d.extracted, vetorizado:d.vectorized,
+    criado_em:d.created_at||null, extraido_em:d.extracted_at||null
   }));
+  // o painel mostrava "0 EXTRAIDOS" mesmo com tudo extraido: os conjuntos
+  // nasciam vazios e so' eram preenchidos ao abrir um documento na sessao
+  extraidos.clear(); vetorizados.clear();
+  IDX.forEach(function(d,i){ if(d.extraido) extraidos.add(i); if(d.vetorizado) vetorizados.add(i); });
   return IDX;
 }
 async function carregarDoc(i){
@@ -500,7 +517,7 @@ const TAGS = {texto:"texto", tabela:"tabela", grafico:"gráfico", foto:"foto/ima
               formula:"fórmula", ocr_pagina:"página (OCR)"};
 
 let extraidos=new Set(), vetorizados=new Set(), selecionados=new Set();
-let filtroCat="todas", pontosSessao=0, docAtual=null, paginaAtual=1, parserRodando=false;
+let filtroCat="todas", filtroSit="todas", ordem="recentes", pontosSessao=0, docAtual=null, paginaAtual=1, parserRodando=false;
 
 const el = id => document.getElementById(id);
 
@@ -531,6 +548,43 @@ function montarFiltros(){
     box.appendChild(b);
   });
 }
+var SITUACOES=[["todas","Todas"],["extraidos","Extraídos"],["nao","Não extraídos"],["vetorizados","Vetorizados"]];
+function montarSituacoes(){
+  var c=el("filtros-sit"); if(!c) return;
+  c.querySelectorAll(".filtro").forEach(function(b){b.remove();});
+  SITUACOES.forEach(function(par){
+    var b=document.createElement("button");
+    b.className="filtro"+(par[0]===filtroSit?" ativo":"");
+    b.textContent=par[1];
+    b.onclick=function(){ filtroSit=par[0]; montarSituacoes(); renderHome(); };
+    c.appendChild(b);
+  });
+}
+function mudarOrdem(v){ ordem=v; renderHome(); }
+/* Aplica filtro e ordenacao, devolvendo os INDICES de IDX na ordem de exibicao.
+   Trabalha com indices porque toda a tela (selecao, abrir, extrair) referencia
+   o documento pela posicao em IDX. */
+function docsVisiveis(){
+  var idx=IDX.map(function(d,i){ return i; }).filter(function(i){
+    var d=IDX[i];
+    if(filtroCat!=="todas" && d.meta.categoria!==filtroCat) return false;
+    if(filtroSit==="extraidos"   && !extraidos.has(i))  return false;
+    if(filtroSit==="nao"         &&  extraidos.has(i))  return false;
+    if(filtroSit==="vetorizados" && !vetorizados.has(i)) return false;
+    return true;
+  });
+  var t=function(i){ return (IDX[i].meta.titulo||IDX[i].arquivo||"").toLowerCase(); };
+  var q=function(i){ return IDX[i].criado_em ? Date.parse(IDX[i].criado_em)||0 : 0; };
+  var p=function(i){ return IDX[i].n_paginas||0; };
+  var cmp={
+    recentes: function(a,b){ return q(b)-q(a) || t(a).localeCompare(t(b)); },
+    antigos:  function(a,b){ return q(a)-q(b) || t(a).localeCompare(t(b)); },
+    maiores:  function(a,b){ return p(b)-p(a); },
+    menores:  function(a,b){ return p(a)-p(b); },
+    titulo:   function(a,b){ return t(a).localeCompare(t(b),"pt-BR"); }
+  }[ordem];
+  return cmp ? idx.sort(cmp) : idx;
+}
 function filtrar(cat,btn){ filtroCat=cat; document.querySelectorAll(".filtro").forEach(b=>b.classList.toggle("ativo",b===btn)); renderHome(); }
 
 let viewMode = "lista";
@@ -553,8 +607,10 @@ function renderHome(){
   const lista = el("lista"); lista.innerHTML="";
   lista.className = "lista" + (viewMode==="grade" ? " grade" : "");
   el("view-home").classList.toggle("grade-mode", viewMode==="grade");
-  IDX.forEach((d,i)=>{
-    if(filtroCat!=="todas" && d.meta.categoria!==filtroCat) return;
+  const visiveis=docsVisiveis();
+  if(!visiveis.length) lista.innerHTML='<div class="md-vazio">Nenhum documento com esses filtros.</div>';
+  visiveis.forEach((i)=>{
+    const d=IDX[i];
     const ext=extraidos.has(i), vet=vetorizados.has(i), sel=selecionados.has(i), m=d.meta, r=d.resumo;
     const thumb = thumbSrc(d.slug);
     const node=document.createElement("div"); node.dataset.id=i;
@@ -605,7 +661,7 @@ function renderHome(){
 }
 function toggleSel(i,elc){ if(elc.checked) selecionados.add(i); else selecionados.delete(i);
   const row=document.querySelector(`.linha[data-id="${i}"]`); if(row) row.classList.toggle("sel",elc.checked); atualizarSelInfo(); }
-function selecionarTodos(elc){ IDX.forEach((d,i)=>{ if(filtroCat!=="todas"&&d.meta.categoria!==filtroCat) return; if(elc.checked) selecionados.add(i); else selecionados.delete(i); }); renderHome(); }
+function selecionarTodos(elc){ docsVisiveis().forEach(function(i){ if(elc.checked) selecionados.add(i); else selecionados.delete(i); }); renderHome(); }
 function atualizarSelInfo(){ const n=selecionados.size;
   el("sel-info").textContent = n===0?"Nenhum selecionado":(n===1?"1 selecionado":n+" selecionados");
   el("btn-parser").disabled = (n===0||parserRodando); }
@@ -1288,7 +1344,7 @@ function vetorizar(){
 }
 
 /* init */
-montarFiltros();
+montarFiltros(); montarSituacoes();
 /* ── login (protótipo de front; validação real = backend) ── */
 function entrar(e){
   if(e) e.preventDefault();

@@ -121,7 +121,7 @@ def listar_documentos():
     pdfs = (
         sb.table("pdfs")
         .select("id,pdf_file,total_pages,approved,extracted,vectorized,"
-                "approved_at,extracted_at,vectorized_at,extraction_time_ms,pipeline")
+                "approved_at,extracted_at,vectorized_at,extraction_time_ms,pipeline,created_at")
         .order("created_at", desc=True)
         .execute()
         .data
