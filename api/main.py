@@ -49,6 +49,28 @@ def _signed(path: str) -> str | None:
         return None
 
 
+def _signed_lote(paths: list[str]) -> dict[str, str | None]:
+    """Assina vários caminhos numa chamada só.
+
+    Uma a uma custa ~96 ms (ida e volta à API do Storage): no Boletim 100, com
+    511 páginas, eram 49 s só para montar as URLs — era ISSO que fazia o
+    documento demorar, não a busca dos blocos. Em lote, as mesmas 511 saem em
+    0,2 s.
+    """
+    limpos = [p for p in paths if p]
+    if not limpos:
+        return {}
+    try:
+        res = sb.storage.from_(IMG_BUCKET).create_signed_urls(limpos, URL_TTL)
+    except Exception:
+        return {p: _signed(p) for p in limpos}      # servidor sem o endpoint em lote
+    fora = {}
+    for item in res or []:
+        caminho = (item.get("path") or "").lstrip("/")
+        fora[caminho] = item.get("signedURL") or item.get("signedUrl")
+    return {p: fora.get(p.lstrip("/")) for p in limpos}
+
+
 @app.get("/api/documents", tags=["documentos"])
 def listar_documentos():
     """Catálogo para a Home: um item por PDF, com metadados e status do pipeline."""
@@ -112,11 +134,12 @@ def listar_documentos():
         elif t == "formula":
             alvo["formulas"] += 1
 
+    thumbs_url = _signed_lote(list(por_thumb.values()))
     return [
         {
             **p,
             "meta": por_pdf.get(p["id"], {}),
-            "thumbnail": _signed(por_thumb.get(p["id"], "")),
+            "thumbnail": thumbs_url.get(por_thumb.get(p["id"], "")),
             "resumo": agregados.get(p["id"], {}),
         }
         for p in pdfs
@@ -153,68 +176,90 @@ def obter_documento(pdf_id: str, pedido: Request):
             sb.table("page_images").select("page_number,image_file")
             .eq("pdf_id", pdf_id).order("page_number").execute().data
         )
-    # pagina até esgotar: o PostgREST corta a resposta em 1000 linhas, e um documento
-    # grande (o Boletim 100 tem 5332 blocos) apareceria truncado no site
-    blocos: list[dict] = []
+    # SÓ os contadores por página: `page_number, block_type` são colunas pequenas,
+    # enquanto `markdown_text` e `layout` (jsonb) são o peso. Buscar o documento
+    # inteiro com os blocos levava 42 s no Boletim 100 — os blocos agora vêm por
+    # página, sob demanda, em /api/document/{id}/pagina/{n}.
+    leves: list[dict] = []
     passo, inicio = 1000, 0
     while True:
         lote = (
-            sb.table("page_blocks").select("page_number,block_type,markdown_text,bbox,layout")
-            .eq("pdf_id", pdf_id).order("page_number")
-            .range(inicio, inicio + passo - 1).execute().data
+            sb.table("page_blocks").select("page_number,block_type")
+            .eq("pdf_id", pdf_id).range(inicio, inicio + passo - 1).execute().data
         )
-        blocos.extend(lote)
+        leves.extend(lote)
         if len(lote) < passo:
             break
         inicio += passo
-    # O Postgres não garante ordem dentro da página, e a ordem de leitura importa:
-    # sem isto os blocos saem embaralhados (o título de seção antes do parágrafo que
-    # o antecede). O id do bloco ('pN-bM') carrega a posição original.
-    def _indice(b):
-        m = re.search(r"-b(\d+)$", ((b.get("layout") or {}).get("id") or ""))
-        return int(m.group(1)) if m else 10**6
 
-    blocos.sort(key=lambda b: (b["page_number"], _indice(b)))
+    contagem: dict[int, dict] = {}
+    for b in leves:
+        c = contagem.setdefault(b["page_number"], {"tabelas": 0, "figuras": 0, "formulas": 0})
+        t = b["block_type"]
+        if t == "tabela":
+            c["tabelas"] += 1
+        elif t in ("grafico", "foto"):
+            c["figuras"] += 1
+        elif t == "formula":
+            c["formulas"] += 1
 
-    # agrupa blocos por página, no formato que o front já entende
-    por_pagina: dict[int, list] = {}
-    for b in blocos:
-        por_pagina.setdefault(b["page_number"], []).append(b.get("layout") or {
-            "tipo": b["block_type"], "md": b["markdown_text"], "bbox": b["bbox"],
-        })
-
+    urls = _signed_lote([img["image_file"] for img in imgs])
     paginas = [
         {
             "n": img["page_number"],
-            "img_url": _signed(img["image_file"]),
-            "rota": img.get("route"),          # docling | chandra
-            "tipo": img.get("page_type"),      # organica | escaneada
+            "img_url": urls.get(img["image_file"]),
+            "rota": img.get("route"),
+            "tipo": img.get("page_type"),
             "w": img.get("width"),
             "h": img.get("height"),
-            "blocos": por_pagina.get(img["page_number"], []),
+            "blocos": None,                    # carregado sob demanda
+            "counts": contagem.get(img["page_number"], {"tabelas": 0, "figuras": 0, "formulas": 0}),
         }
         for img in imgs
     ]
 
-    # se houver edição manual, ela substitui o que a extração produziu; o original
-    # continua intacto no banco e volta assim que a edição for descartada
     ed = _edicao_de(pdf_id)
-    if ed and ed.get("layout"):
-        por_n = {p["n"]: p for p in ed["layout"] if isinstance(p, dict) and "n" in p}
-        for pg in paginas:
-            e = por_n.get(pg["n"])
-            if e and e.get("blocos") is not None:
-                pg["blocos"] = e["blocos"]
 
     return {
         **pdf,
         "meta": meta[0] if meta else {},
         "paginas": paginas,
-        "total_blocos": sum(len(p["blocos"]) for p in paginas),
+        "total_blocos": len(leves),
         "editado": bool(ed),
         "edited_at": (ed or {}).get("edited_at"),
         "markdown": (ed or {}).get("markdown") or pdf.get("markdown"),
     }
+
+
+@app.get("/api/document/{pdf_id}/pagina/{n}", tags=["documentos"])
+def obter_pagina(pdf_id: str, n: int, pedido: Request):
+    """Blocos de UMA página: bbox, markdown e tipo.
+
+    O documento inteiro do Boletim 100 são 5.074 blocos e levava 42 s para vir.
+    Uma página traz ~10 blocos. Sem limite de leitura aqui: navegar página a
+    página é uso normal, e o limite por documento (5/min) travaria a leitura.
+    """
+    blocos = (
+        sb.table("page_blocks").select("page_number,block_type,markdown_text,bbox,layout")
+        .eq("pdf_id", pdf_id).eq("page_number", n).execute().data
+    )
+
+    def _indice(b):
+        m = re.search(r"-b(\d+)$", ((b.get("layout") or {}).get("id") or ""))
+        return int(m.group(1)) if m else 10**6
+
+    blocos.sort(key=_indice)      # o Postgres não garante ordem; o id carrega a posição
+    saida = [b.get("layout") or {"tipo": b["block_type"], "md": b["markdown_text"],
+                                 "bbox": b["bbox"]} for b in blocos]
+
+    # a edição manual desta página, se houver, substitui o que a extração produziu
+    ed = _edicao_de(pdf_id)
+    if ed and ed.get("layout"):
+        for p in ed["layout"]:
+            if isinstance(p, dict) and p.get("n") == n and p.get("blocos") is not None:
+                saida = p["blocos"]
+                break
+    return {"n": n, "blocos": saida, "editado": bool(ed)}
 
 
 # ── edição manual ────────────────────────────────────────────────────────────

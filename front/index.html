@@ -474,7 +474,8 @@ async function carregarDoc(i){
     n:p.n, img_url:p.img_url, img:"",
     w:p.w||1000, h:p.h||1300,          // do banco; senão o onload da imagem corrige
     rota:p.rota||null, tipo:p.tipo||null,
-    blocos:p.blocos||[], counts:_counts(p.blocos||[])
+    blocos:(p.blocos===null||p.blocos===undefined)?null:p.blocos,   // null = ainda nao buscado
+    counts:p.counts||_counts(p.blocos||[])
   }));
   DOCS[d.slug] = { slug:d.slug, n_paginas:d.n_paginas, meta:d.meta,
                    paginas:paginas, resumo:_resumo(paginas),
@@ -637,16 +638,37 @@ async function abrirDoc(i){
   el("res-legivel").innerHTML='<div class="md-vazio">Carregando…</div>';
   try{ await carregarDoc(i); }
   catch(e){ el("res-legivel").innerHTML='<div class="md-vazio">Erro ao carregar: '+esc(e.message)+'</div>'; return; }
-  renderPagina(); renderMeta(d); mostrarTab("legivel"); ligarHover(); resetVetFoot(i); zoomReset();
+  await renderPagina(); renderMeta(d); mostrarTab("legivel"); ligarHover(); resetVetFoot(i); zoomReset();
   refletirEdicao(DOCS[d.slug]);
 }
 
 /* ── EXTRACT: página (imagem + overlays) + markdown ── */
 function paginasDoAtual(){ return layoutDe(IDX[docAtual].slug).paginas || []; }
 
-function renderPagina(){
+/* Busca os blocos de UMA pagina. O documento vem sem eles: no Boletim 100 os
+   5.074 blocos faziam a abertura levar 42 s. Guarda o que ja' baixou. */
+async function garantirBlocos(pg){
+  if(!pg || pg.blocos!==null) return pg;
+  var d=IDX[docAtual];
+  try{
+    var r=await fetch(API+"/document/"+d.id+"/pagina/"+pg.n);
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    var j=await r.json();
+    pg.blocos=j.blocos||[]; pg.counts=_counts(pg.blocos);
+  }catch(e){
+    pg.blocos=[];                       // nao trava a pagina; o erro aparece no painel
+    console.error("pagina "+pg.n+": "+e.message);
+  }
+  return pg;
+}
+async function renderPagina(){
   const d=IDX[docAtual], pags=paginasDoAtual();
   const pg = pags[paginaAtual-1];
+  if(pg && pg.blocos===null){
+    el("res-legivel").innerHTML='<div class="md-vazio">Carregando página…</div>';
+    await garantirBlocos(pg);
+    if(pags[paginaAtual-1]!==pg) return;      // trocou de pagina enquanto buscava
+  }
   el("ex-page-inp").value = paginaAtual; el("ex-total").textContent = d.n_paginas;
   var _rota = el("ex-rota");
   if(pg && pg.rota){ _rota.style.display="inline-block"; _rota.className="ex-rota rota-"+pg.rota; _rota.textContent = ({chandra:"Chandra",docling:"Docling",mineru:"MinerU",marker:"Marker"})[pg.rota] || pg.rota; }
@@ -683,12 +705,12 @@ function renderPagina(){
 function mudarPagina(delta){
   const pags=paginasDoAtual(); const nova=paginaAtual+delta;
   if(nova<1||nova>pags.length) return;
-  paginaAtual=nova; renderPagina();
+  paginaAtual=nova; renderPagina().then(ligarHover);
 }
 function irParaPagina(v){
   var pags=paginasDoAtual(), n=parseInt(String(v).replace(/\D/g,""),10);
   if(!n || n<1 || n>pags.length){ el("ex-page-inp").value=paginaAtual; return; }  // fora do limite: rejeita
-  paginaAtual=n; renderPagina();
+  paginaAtual=n; renderPagina().then(ligarHover);
 }
 function pageInpKey(e){
   if(e.key==="Enter"){ e.preventDefault(); irParaPagina(e.target.value); e.target.blur(); }
