@@ -71,6 +71,50 @@ def _signed_lote(paths: list[str]) -> dict[str, str | None]:
     return {p: fora.get(p.lstrip("/")) for p in limpos}
 
 
+def _contagens(ids: list[str]) -> dict[str, dict]:
+    """Contadores por documento (tabelas/figuras/fórmulas) para a Home.
+
+    Usa a view `document_block_counts`, que agrega no Postgres — uma ida e volta
+    para todos os documentos. Sem ela, cai no caminho antigo: baixar todos os
+    blocos e contar em Python, que levava ~4,9 s com 12 documentos e piora
+    linearmente. Ver supabase/003_contagem_blocos.sql.
+    """
+    vazio = {"tabelas": 0, "figuras": 0, "formulas": 0}
+    try:
+        linhas = (sb.table("document_block_counts")
+                  .select("pdf_id,tabelas,figuras,formulas")
+                  .in_("pdf_id", ids).execute().data)
+        fora = {i: dict(vazio) for i in ids}
+        for l in linhas:
+            fora[l["pdf_id"]] = {"tabelas": l["tabelas"] or 0,
+                                 "figuras": l["figuras"] or 0,
+                                 "formulas": l["formulas"] or 0}
+        return fora
+    except Exception:
+        pass                              # migração 003 ainda não aplicada
+
+    fora = {i: dict(vazio) for i in ids}
+    passo, inicio = 1000, 0
+    while True:
+        lote = (sb.table("page_blocks").select("pdf_id,block_type")
+                .in_("pdf_id", ids).range(inicio, inicio + passo - 1).execute().data)
+        for b in lote:
+            alvo = fora.get(b["pdf_id"])
+            if alvo is None:
+                continue
+            t = b["block_type"]
+            if t == "tabela":
+                alvo["tabelas"] += 1
+            elif t in ("grafico", "foto"):
+                alvo["figuras"] += 1
+            elif t == "formula":
+                alvo["formulas"] += 1
+        if len(lote) < passo:
+            break
+        inicio += passo
+    return fora
+
+
 @app.get("/api/documents", tags=["documentos"])
 def listar_documentos():
     """Catálogo para a Home: um item por PDF, com metadados e status do pipeline."""
@@ -106,33 +150,7 @@ def listar_documentos():
     )
     por_thumb = {t["pdf_id"]: t["image_file"] for t in thumbs}
 
-    # contadores por documento (tabelas/figuras/fórmulas) para a Home
-    # NOTA: agrega no Python. Em escala (dezenas de milhares de blocos) trocar por
-    #       uma view/RPC no Postgres que já devolva os totais agregados.
-    agregados: dict[str, dict] = {i: {"tabelas": 0, "figuras": 0, "formulas": 0} for i in ids}
-    blocos: list[dict] = []
-    passo = 1000                     # o PostgREST limita a resposta; pagina até esgotar
-    inicio = 0
-    while True:
-        lote = (
-            sb.table("page_blocks").select("pdf_id,block_type")
-            .in_("pdf_id", ids).range(inicio, inicio + passo - 1).execute().data
-        )
-        blocos.extend(lote)
-        if len(lote) < passo:
-            break
-        inicio += passo
-    for b in blocos:
-        alvo = agregados.get(b["pdf_id"])
-        if alvo is None:
-            continue
-        t = b["block_type"]
-        if t == "tabela":
-            alvo["tabelas"] += 1
-        elif t in ("grafico", "foto"):
-            alvo["figuras"] += 1
-        elif t == "formula":
-            alvo["formulas"] += 1
+    agregados = _contagens(ids)
 
     thumbs_url = _signed_lote(list(por_thumb.values()))
     return [
@@ -348,6 +366,10 @@ def salvar_edicao(pdf_id: str, edicao: Edicao, pedido: Request):
     except Exception as e:
         raise HTTPException(503, f"tabela document_edits indisponível — aplique "
                                  f"supabase/002_edicoes.sql. Detalhe: {e}")
+    registrar("documento_editado", edicao.edited_by, pdf_id,
+              {"paginas": [p.get("n") for p in (edicao.layout or [])],
+               "markdown": edicao.markdown is not None},
+              pedido.client.host if pedido.client else None)
     return obter_edicao(pdf_id)
 
 
@@ -358,7 +380,59 @@ def descartar_edicao(pdf_id: str):
         sb.table("document_edits").delete().eq("pdf_id", pdf_id).execute()
     except Exception as e:
         raise HTTPException(503, f"tabela document_edits indisponível: {e}")
+    registrar("edicao_descartada", None, pdf_id)
     return {"editado": False}
+
+
+# ── auditoria ────────────────────────────────────────────────────────────────
+# Registra entrada/saída, alteração de documento e o que entrou no acervo.
+# Append-only: o app só insere e lê (ver supabase/004_auditoria.sql).
+
+class EventoLog(BaseModel):
+    evento: str
+    ator: str | None = None
+    alvo: str | None = None
+    detalhe: dict[str, Any] | None = None
+
+
+EVENTOS = {"login", "logout", "documento_editado", "edicao_descartada",
+           "pdf_ingerido", "pdf_removido"}
+
+
+def registrar(evento: str, ator=None, alvo=None, detalhe=None, ip=None) -> None:
+    """Grava no log. Nunca levanta: auditoria não pode derrubar a operação."""
+    try:
+        sb.table("audit_log").insert({
+            "evento": evento, "ator": ator, "alvo": alvo,
+            "detalhe": detalhe, "ip": ip,
+        }).execute()
+    except Exception as e:
+        print(f"[aviso] auditoria não gravou ({evento}): {e}")
+
+
+@app.post("/api/log", tags=["auditoria"])
+def anotar(ev: EventoLog, pedido: Request):
+    """Usado pelo front para registrar login e logout."""
+    if ev.evento not in EVENTOS:
+        raise HTTPException(400, f"evento desconhecido; use um de {sorted(EVENTOS)}")
+    registrar(ev.evento, ev.ator, ev.alvo, ev.detalhe,
+              pedido.client.host if pedido.client else None)
+    return {"ok": True}
+
+
+@app.get("/api/log", tags=["auditoria"])
+def historico(limite: int = 200, evento: str | None = None, alvo: str | None = None):
+    """Histórico, do mais recente para o mais antigo."""
+    try:
+        q = sb.table("audit_log").select("*").order("criado_em", desc=True).limit(min(limite, 1000))
+        if evento:
+            q = q.eq("evento", evento)
+        if alvo:
+            q = q.eq("alvo", alvo)
+        return q.execute().data
+    except Exception as e:
+        raise HTTPException(503, f"tabela audit_log indisponível — aplique "
+                                 f"supabase/004_auditoria.sql. Detalhe: {e}")
 
 
 @app.get("/api/health", tags=["infra"])

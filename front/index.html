@@ -138,6 +138,19 @@
   .ex-nav button:disabled{opacity:.4;cursor:default;}
   .ex-page-inp{width:32px;text-align:center;border:1px solid var(--borda);border-radius:5px;background:#fff;color:#333;font-size:12px;padding:3px 2px;font-variant-numeric:tabular-nums;}
   .ex-page-inp:focus{outline:2px solid var(--verde);outline-offset:1px;}
+
+  .painel-overlay{position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;padding:24px;}
+  .painel-card{background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:100%;max-width:860px;max-height:82vh;display:flex;flex-direction:column;}
+  .painel-cab{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--borda);}
+  .painel-cab b{font-size:15px;}
+  .painel-x{cursor:pointer;color:var(--cinza);font-size:16px;padding:2px 6px;}
+  .painel-corpo{overflow:auto;padding:14px 20px 20px;}
+  .log-t{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .log-t th{text-align:left;color:var(--cinza);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:6px 8px;border-bottom:1px solid var(--borda);position:sticky;top:0;background:#fff;}
+  .log-t td{padding:6px 8px;border-bottom:1px solid #f1f1f1;vertical-align:top;}
+  .log-ev{display:inline-block;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;}
+  .cfg-l{display:flex;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid #f1f1f1;font-size:13px;}
+  .cfg-l span:first-child{color:var(--cinza);}
   /* login (antes da home) */
   .login-overlay{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--verde) 0%,#123c20 100%);padding:20px;}
   .login-card{width:100%;max-width:360px;background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:34px 30px;text-align:center;}
@@ -318,7 +331,7 @@
     <button class="topbar-expand" onclick="toggleSidebar()" title="Expandir menu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button>
     <span class="tit" id="topbar-tit">Home</span>
     <span class="sp"></span>
-    <span class="btn-top">Configs</span><span class="btn-top">Histórico</span>
+    <span class="btn-top" onclick="abrirConfigs()" style="cursor:pointer">Configs</span><span class="btn-top" onclick="abrirHistorico()" style="cursor:pointer">Histórico</span>
   </div>
 
   <!-- HOME -->
@@ -831,6 +844,90 @@ window.addEventListener("beforeunload", function(e){
   if(_persistPend){ e.preventDefault(); e.returnValue=""; }
 });
 
+
+/* ── Histórico e Configs ────────────────────────────────────────────────────
+   O histórico é o log do servidor: entrada/saída, alteração de documento e o
+   que entrou no acervo. O "ator" é o que a pessoa digitou no login — enquanto
+   a autenticação for protótipo, ele não prova identidade. */
+var USUARIO = null;
+var EV_ROTULO = {
+  login:              ["entrou",                "#166534", "#dcfce7"],
+  logout:             ["saiu",                  "#7c2d12", "#ffedd5"],
+  documento_editado:  ["alterou documento",     "#1e40af", "#dbeafe"],
+  edicao_descartada:  ["descartou alteração",   "#7c2d12", "#ffedd5"],
+  pdf_ingerido:       ["PDF adicionado",        "#166534", "#dcfce7"],
+  pdf_removido:       ["PDF removido",          "#991b1b", "#fee2e2"]
+};
+async function anotar(evento, alvo, detalhe){
+  try{
+    await fetch(API+"/log", {method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({evento:evento, ator:USUARIO, alvo:alvo||null, detalhe:detalhe||null})});
+  }catch(e){ /* auditoria nunca atrapalha o uso */ }
+}
+function abrirPainel(titulo, html){
+  el("painel-tit").textContent=titulo; el("painel-corpo").innerHTML=html;
+  el("painel").style.display="flex";
+}
+function fecharPainel(){ el("painel").style.display="none"; }
+function _quando(iso){
+  if(!iso) return "—";
+  var d=new Date(iso);
+  return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+}
+function _nomeDoc(alvo){
+  if(!alvo) return "";
+  for(var i=0;i<IDX.length;i++){ if(IDX[i].id===alvo||IDX[i].slug===alvo)
+    return (IDX[i].meta && IDX[i].meta.titulo) || IDX[i].arquivo || alvo; }
+  return alvo;
+}
+async function abrirHistorico(){
+  abrirPainel("Histórico", '<div class="md-vazio">Carregando…</div>');
+  try{
+    var r=await fetch(API+"/log?limite=300");
+    if(!r.ok){
+      var t=await r.text();
+      abrirPainel("Histórico", '<div class="md-vazio">Não foi possível ler o histórico.<br><small>'+esc(t.slice(0,300))+'</small></div>');
+      return;
+    }
+    var itens=await r.json();
+    if(!itens.length){ abrirPainel("Histórico", '<div class="md-vazio">Nada registrado ainda.</div>'); return; }
+    var linhas=itens.map(function(l){
+      var m=EV_ROTULO[l.evento]||[l.evento,"#374151","#f3f4f6"];
+      var det="";
+      if(l.detalhe && l.detalhe.paginas && l.detalhe.paginas.length)
+        det="páginas "+l.detalhe.paginas.join(", ");
+      else if(l.detalhe && l.detalhe.paginas_pdf) det=l.detalhe.paginas_pdf+" páginas";
+      else if(l.detalhe) det=esc(JSON.stringify(l.detalhe).slice(0,70));
+      return '<tr><td style="white-space:nowrap">'+_quando(l.criado_em)+'</td>'+
+        '<td><span class="log-ev" style="color:'+m[1]+';background:'+m[2]+'">'+m[0]+'</span></td>'+
+        '<td>'+esc(l.ator||"—")+'</td>'+
+        '<td>'+esc(String(_nomeDoc(l.alvo)).slice(0,52))+'</td>'+
+        '<td style="color:var(--cinza)">'+det+'</td></tr>';
+    }).join("");
+    abrirPainel("Histórico — "+itens.length+" eventos",
+      '<table class="log-t"><thead><tr><th>Quando</th><th>Evento</th><th>Quem</th><th>Documento</th><th>Detalhe</th></tr></thead><tbody>'+linhas+'</tbody></table>');
+  }catch(e){
+    abrirPainel("Histórico", '<div class="md-vazio">Erro: '+esc(e.message)+'</div>');
+  }
+}
+async function abrirConfigs(){
+  var saude={};
+  try{ saude=await (await fetch(API+"/health")).json(); }catch(e){ saude={status:"sem resposta"}; }
+  var docs=IDX.length, pgs=IDX.reduce(function(a,d){return a+(d.n_paginas||0);},0);
+  function linha(k,v){ return '<div class="cfg-l"><span>'+k+'</span><b>'+esc(String(v))+'</b></div>'; }
+  abrirPainel("Configurações",
+    linha("Usuário da sessão", USUARIO||"—")+
+    linha("API", location.origin+API)+
+    linha("Estado do servidor", saude.status||"—")+
+    linha("Documentos no acervo", docs)+
+    linha("Páginas no acervo", pgs)+
+    linha("Limite de edições", "5 por minuto, por documento")+
+    linha("Limite de leituras", "5 por minuto, por documento")+
+    linha("Collection do Qdrant", "sb100")+
+    '<div style="margin-top:14px;padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;font-size:12px;color:#7c2d12">'+
+    '<b>Autenticação é protótipo.</b> O login aceita qualquer usuário e senha e não protege nada. '+
+    'O campo "quem" do histórico registra o que foi digitado, não uma identidade verificada.</div>');
+}
 /* ── metadados ── */
 
 /* ── ABA LEGÍVEL (visual; o Markdown é o que vai pro vetor) ── */
@@ -1199,6 +1296,8 @@ function entrar(e){
   var erro=el("login-erro");
   if(!u || !p){ erro.textContent="Preencha usuário e senha."; return; }
   erro.textContent="";
+  USUARIO=u;
+  anotar("login");
   el("view-login").style.display="none";
   var av=document.querySelector(".sb-user .av"), nome=document.querySelector(".sb-user > div:last-child");
   if(av) av.textContent=(u.slice(0,2)||"US").toUpperCase();
@@ -1219,5 +1318,12 @@ async function iniciar(){
 
 irHome();
 </script>
+
+<div id="painel" class="painel-overlay" style="display:none" onclick="if(event.target===this)fecharPainel()">
+  <div class="painel-card">
+    <div class="painel-cab"><b id="painel-tit"></b><span class="painel-x" onclick="fecharPainel()">✕</span></div>
+    <div id="painel-corpo" class="painel-corpo"></div>
+  </div>
+</div>
 </body>
 </html>

@@ -44,6 +44,8 @@ def achar_pdf(nome: str) -> Path | None:
         if p.exists():
             return p
     return None
+
+
 PIPELINE = "hibrido: DocLayout-YOLO + Chandra OCR 2 + Docling + PyMuPDF"
 FORCE = "--force" in sys.argv
 
@@ -173,6 +175,14 @@ def ingest_doc(entry: dict) -> None:
     for i in range(0, len(blocos), 500):            # insere em lotes
         sb.table("page_blocks").insert(blocos[i:i + 500]).execute()
 
+    try:
+        sb.table("audit_log").insert({
+            "evento": "pdf_ingerido", "ator": "ingest_supabase.py", "alvo": pdf_id,
+            "detalhe": {"slug": slug, "paginas_pdf": entry.get("n_paginas"),
+                        "blocos": len(blocos)},
+        }).execute()
+    except Exception as e:
+        print(f"    (auditoria não gravou: {e})")
     print(f"    ✅ {slug}: {len(paginas)} páginas | {len(blocos)} blocos | pdf_id={pdf_id}")
 
 
