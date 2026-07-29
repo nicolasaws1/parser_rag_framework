@@ -346,7 +346,8 @@
       <h2>PDFs aprovados para extração</h2>
       <p>Artigos aprovados pelo curador na Squad 1, recebidos pela API. Só os metadados chegam aqui — o parser (DocLayout-YOLO + Chandra OCR) é quem descobre páginas, tabelas, figuras e fórmulas.</p>
       <div class="home-badges">
-        <div class="home-badge"><div class="n" id="badge-total">0</div><div class="l">Aprovados (Squad 1)</div></div>
+        <div class="home-badge"><div class="n" id="badge-curad">—</div><div class="l">Aprovados na curadoria</div></div>
+        <div class="home-badge"><div class="n" id="badge-total">0</div><div class="l">Baixados aqui</div></div>
         <div class="home-badge"><div class="n" id="badge-ext">0</div><div class="l">Extraídos (parser)</div></div>
         <div class="home-badge"><div class="n" id="badge-vet">0</div><div class="l">Vetorizados (Qdrant)</div></div>
       </div>
@@ -632,10 +633,14 @@ function setView(mode){
 function renderHome(){
   // parte/total em cada etapa: o denominador dos aprovados e' quanto a curadoria
   // tem (da ultima checagem, sem bater na API); nas outras, quanto ha' no banco
+  // "16/230 aprovados" dava a entender que so' 16 foram aprovados. O total da
+  // curadoria virou indicador proprio, e os demais mostram progresso sobre o
+  // que de fato esta' aqui.
   var noBanco=IDX.length;
-  el("badge-total").textContent = TOTAL_CURADORIA ? (noBanco+"/"+TOTAL_CURADORIA) : String(noBanco);
-  el("badge-ext").textContent   = extraidos.size+"/"+noBanco;
-  el("badge-vet").textContent   = vetorizados.size+"/"+noBanco;
+  el("badge-curad").textContent = TOTAL_CURADORIA || "—";
+  el("badge-total").textContent = TOTAL_CURADORIA ? (noBanco+" de "+TOTAL_CURADORIA) : String(noBanco);
+  el("badge-ext").textContent   = extraidos.size+" de "+noBanco;
+  el("badge-vet").textContent   = vetorizados.size+" de "+noBanco;
   const lista = el("lista"); lista.innerHTML="";
   lista.className = "lista" + (viewMode==="grade" ? " grade" : "");
   el("view-home").classList.toggle("grade-mode", viewMode==="grade");
