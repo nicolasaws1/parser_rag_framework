@@ -151,6 +151,7 @@
   .log-ev{display:inline-block;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;}
   .cfg-l{display:flex;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid #f1f1f1;font-size:13px;}
   .cfg-l span:first-child{color:var(--cinza);}
+  .mini-chip.fila{background:#fef3c7;color:#92400e;}
   .sel-ordem{border:1px solid var(--borda);border-radius:20px;padding:5px 10px;font-size:12px;font-weight:600;background:#fff;cursor:pointer;color:#1a1a1a;font-family:inherit;}
   .sel-ordem:focus{outline:2px solid var(--verde);outline-offset:1px;}
   /* login (antes da home) */
@@ -486,7 +487,8 @@ async function carregarDocumentos(){
     n_paginas:d.total_pages||0, meta:_meta(d.meta), thumb:d.thumbnail||"",
     resumo:d.resumo||{tabelas:0,figuras:0,formulas:0},
     aprovado:d.approved, extraido:d.extracted, vetorizado:d.vectorized,
-    criado_em:d.created_at||null, extraido_em:d.extracted_at||null
+    criado_em:d.created_at||null, extraido_em:d.extracted_at||null,
+    na_fila:!!d.extraction_requested_at
   }));
   // o painel mostrava "0 EXTRAIDOS" mesmo com tudo extraido: os conjuntos
   // nasciam vazios e so' eram preenchidos ao abrir um documento na sessao
@@ -624,7 +626,7 @@ function renderHome(){
           <div class="card-g-meta">${(m.autores||"").split(",")[0]} et al. · ${m.ano} · ${m.periodico} · <b>${d.n_paginas}</b> páginas</div>
           <div class="card-g-chips">
             <span class="mini-chip cat">${m.categoria}</span>
-            ${ext?'<span class="mini-chip ok">extraído</span>':''}${vet?'<span class="mini-chip vet">vetorizado</span>':''}
+            ${ext?'<span class="mini-chip ok">extraído</span>':(d.na_fila?'<span class="mini-chip fila">na fila</span>':'')}${vet?'<span class="mini-chip vet">vetorizado</span>':''}
           </div>
           <button class="btn-abrir" onclick="abrirDoc(${i})" title="Abrir">Abrir
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
@@ -666,14 +668,87 @@ function atualizarSelInfo(){ const n=selecionados.size;
   el("sel-info").textContent = n===0?"Nenhum selecionado":(n===1?"1 selecionado":n+" selecionados");
   el("btn-parser").disabled = (n===0||parserRodando); }
 
-/* ── PARSER ── */
+
+/* Documento aprovado mas ainda sem extracao: nao ha' pagina nem bloco para
+   mostrar. Antes caia aqui e ficava em "Carregando..." para sempre. */
+function mostrarNaoExtraido(d, i){
+  el("pdf-wrap").innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:40px">'+
+    '<div style="text-align:center;max-width:380px">'+
+    '<div style="font-size:40px;line-height:1;margin-bottom:14px">📄</div>'+
+    '<div style="font-weight:700;font-size:15px;margin-bottom:6px">Ainda não extraído</div>'+
+    '<div style="font-size:13px;color:var(--cinza);line-height:1.6">'+
+    'O PDF está aprovado e guardado, mas o parser ainda não rodou. '+
+    'Não há páginas nem blocos para mostrar.</div></div></div>';
+  var fila = d.na_fila;
+  el("res-legivel").innerHTML =
+    '<div style="padding:22px">'+
+    '<div style="font-size:13px;line-height:1.7;color:#374151">'+
+    '<b>'+esc(d.meta.titulo||d.arquivo)+'</b><br>'+
+    (d.n_paginas||0)+' páginas · aprovado pela Squad 1</div>'+
+    (fila
+      ? '<div style="margin-top:16px;padding:12px 14px;background:#fef3c7;border:1px solid #fde68a;border-radius:9px;font-size:12.5px;color:#92400e">'+
+        '<b>Na fila de extração.</b> O lado com GPU consulta a fila e processa; '+
+        'o documento aparece extraído quando o resultado for ingerido.</div>'
+      : '<button onclick="pedirExtracao('+i+')" id="btn-extrair-um" '+
+        'style="margin-top:18px;width:100%;padding:11px;border:none;border-radius:10px;'+
+        'background:var(--verde);color:#fff;font-weight:700;font-size:13.5px;cursor:pointer">'+
+        'Solicitar extração</button>')+
+    '<div style="margin-top:14px;padding:10px 12px;background:#f8f8f8;border:1px solid var(--borda);border-radius:8px;font-size:11.5px;color:var(--cinza);line-height:1.6">'+
+    'A extração precisa de GPU e roda no notebook (DocLayout-YOLO + Chandra OCR 2 + '+
+    'Docling + PyMuPDF). Este servidor não extrai — ele registra o pedido.</div></div>';
+  el("res-md").innerHTML=''; el("res-meta").innerHTML='';
+  renderMeta(d);
+  el("ex-page-inp").value=1; el("ex-total").textContent=d.n_paginas||0;
+  el("ex-rota").style.display="none";
+  marcarEstado(""); var bd=el("btn-descartar"); if(bd) bd.style.display="none";
+}
+async function pedirExtracao(i){
+  var d=IDX[i], b=el("btn-extrair-um");
+  if(b){ b.disabled=true; b.textContent="Solicitando…"; }
+  try{
+    var r=await fetch(API+"/document/"+d.id+"/extrair",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({solicitado_por:USUARIO})});
+    if(!r.ok) throw new Error("HTTP "+r.status+" — "+(await r.text()).slice(0,120));
+    d.na_fila=true; mostrarNaoExtraido(d,i);
+  }catch(e){
+    if(b){ b.disabled=false; b.textContent="Solicitar extração"; }
+    abrirPainel("Não deu para solicitar", '<p style="font-size:13px">'+esc(e.message)+'</p>');
+  }
+}
+/* ── PARSER ──
+   Este servidor NAO extrai: a extracao roda no lado com GPU (hoje o notebook no
+   Colab). O botao coloca o documento na fila, e o lado GPU consulta /api/fila.
+   Antes daqui o botao so' animava a linha e marcava como extraido no navegador,
+   sem chamar nada — parecia ter funcionado e nao tinha. */
 async function analisarSelecionados(){
-  if(parserRodando||selecionados.size===0) return; parserRodando=true; el("btn-parser").disabled=true;
+  if(parserRodando||selecionados.size===0) return;
+  parserRodando=true; el("btn-parser").disabled=true;
+  var pedidos=0, jaFeitos=0, falhas=[];
   for(const i of [...selecionados]){
-    if(extraidos.has(i)){ selecionados.delete(i); continue; }
-    await analisarUm(i); extraidos.add(i); selecionados.delete(i); el("badge-ext").textContent=extraidos.size;
+    if(extraidos.has(i)){ selecionados.delete(i); jaFeitos++; continue; }
+    var d=IDX[i];
+    try{
+      var r=await fetch(API+"/document/"+d.id+"/extrair", {method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({solicitado_por:USUARIO})});
+      if(!r.ok){ falhas.push(d.arquivo+": HTTP "+r.status); continue; }
+      d.na_fila=true; pedidos++; selecionados.delete(i);
+    }catch(e){ falhas.push(d.arquivo+": "+e.message); }
   }
   parserRodando=false; renderHome();
+  var msg="";
+  if(pedidos)  msg+=pedidos+" documento(s) na fila de extração. ";
+  if(jaFeitos) msg+=jaFeitos+" já estava(m) extraído(s). ";
+  if(falhas.length) msg+="Falhas: "+falhas.join("; ");
+  abrirPainel("Extração solicitada",
+    '<p style="font-size:13px;line-height:1.6">'+esc(msg||"Nada a fazer.")+'</p>'+
+    '<div style="margin-top:12px;padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;font-size:12px;color:#7c2d12">'+
+    '<b>Este servidor não extrai.</b> A extração precisa de GPU e roda no notebook '+
+    '(DocLayout-YOLO + Chandra OCR 2 + Docling + PyMuPDF). O que ficou registrado é o '+
+    '<i>pedido</i>: o lado GPU consulta <code>/api/fila</code> para saber o que processar, '+
+    'e o documento aparece como extraído quando o resultado for ingerido.</div>');
 }
 function analisarUm(i){
   return new Promise(res=>{
@@ -699,11 +774,12 @@ function refletirEdicao(lay){
   if(lay && lay.editado) marcarEstado("salvo", lay.editado_em); else marcarEstado("");
 }
 async function abrirDoc(i){
-  docAtual=i; extraidos.add(i);
+  docAtual=i;   // abrir NAO extrai: quem marca extraido e' o banco, na ingestao
   const d=IDX[i];
   el("view-home").style.display="none"; el("view-extract").style.display="flex";
   el("topbar-tit").textContent="Extração"; el("ex-filename").textContent=d.arquivo; setNav("extract");
   paginaAtual=1; legFiltro="tudo";
+  if(!d.extraido){ mostrarNaoExtraido(d, i); return; }
   el("res-legivel").innerHTML='<div class="md-vazio">Carregando…</div>';
   try{ await carregarDoc(i); }
   catch(e){ el("res-legivel").innerHTML='<div class="md-vazio">Erro ao carregar: '+esc(e.message)+'</div>'; return; }

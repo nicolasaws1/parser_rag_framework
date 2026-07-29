@@ -12,6 +12,7 @@ Rodar:
 import os
 import re
 from pathlib import Path
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -118,14 +119,16 @@ def _contagens(ids: list[str]) -> dict[str, dict]:
 @app.get("/api/documents", tags=["documentos"])
 def listar_documentos():
     """Catálogo para a Home: um item por PDF, com metadados e status do pipeline."""
-    pdfs = (
-        sb.table("pdfs")
-        .select("id,pdf_file,total_pages,approved,extracted,vectorized,"
-                "approved_at,extracted_at,vectorized_at,extraction_time_ms,pipeline,created_at")
-        .order("created_at", desc=True)
-        .execute()
-        .data
-    )
+    BASE = ("id,pdf_file,total_pages,approved,extracted,vectorized,"
+            "approved_at,extracted_at,vectorized_at,extraction_time_ms,pipeline,created_at")
+    try:
+        pdfs = (sb.table("pdfs").select(BASE + ",extraction_requested_at")
+                .order("created_at", desc=True).execute().data)
+    except Exception:
+        # colunas da fila ainda não aplicadas (005_fila_extracao.sql). A Home não
+        # pode cair por causa disso — antes desta guarda ela devolvia 500.
+        pdfs = (sb.table("pdfs").select(BASE)
+                .order("created_at", desc=True).execute().data)
     if not pdfs:
         return []
 
@@ -396,7 +399,7 @@ class EventoLog(BaseModel):
 
 
 EVENTOS = {"login", "logout", "documento_editado", "edicao_descartada",
-           "pdf_ingerido", "pdf_removido"}
+           "pdf_ingerido", "pdf_removido", "extracao_solicitada"}
 
 
 def registrar(evento: str, ator=None, alvo=None, detalhe=None, ip=None) -> None:
@@ -433,6 +436,51 @@ def historico(limite: int = 200, evento: str | None = None, alvo: str | None = N
     except Exception as e:
         raise HTTPException(503, f"tabela audit_log indisponível — aplique "
                                  f"supabase/004_auditoria.sql. Detalhe: {e}")
+
+
+# ── fila de extração ─────────────────────────────────────────────────────────
+# A extração roda no lado com GPU (hoje o notebook no Colab). ESTE servidor não
+# extrai nada — ele registra o pedido, e o lado GPU consulta a fila. Ver
+# supabase/005_fila_extracao.sql.
+
+class PedidoExtracao(BaseModel):
+    solicitado_por: str | None = None
+
+
+@app.post("/api/document/{pdf_id}/extrair", tags=["extração"])
+def pedir_extracao(pdf_id: str, pedido_ext: PedidoExtracao, pedido: Request):
+    """Coloca o documento na fila de extração. NÃO extrai aqui."""
+    linha = sb.table("pdfs").select("id,pdf_file,extracted,extraction_requested_at")         .eq("id", pdf_id).execute().data
+    if not linha:
+        raise HTTPException(404, "PDF não encontrado")
+    if linha[0].get("extracted"):
+        raise HTTPException(409, "este documento já foi extraído")
+    limitar(pedido, "edicao", pdf_id)
+    agora = datetime.now(timezone.utc).isoformat()
+    try:
+        sb.table("pdfs").update({"extraction_requested_at": agora,
+                                 "extraction_requested_by": pedido_ext.solicitado_por})             .eq("id", pdf_id).execute()
+    except Exception as e:
+        raise HTTPException(503, f"colunas da fila ausentes — aplique "
+                                 f"supabase/005_fila_extracao.sql. Detalhe: {e}")
+    registrar("extracao_solicitada", pedido_ext.solicitado_por, pdf_id,
+              {"arquivo": linha[0]["pdf_file"]},
+              pedido.client.host if pedido.client else None)
+    return {"na_fila": True, "solicitado_em": agora,
+            "aviso": "A extração roda no lado com GPU; este servidor apenas registrou o pedido."}
+
+
+@app.get("/api/fila", tags=["extração"])
+def fila_extracao():
+    """O que está pedido e ainda não foi extraído — é isto que o lado GPU consulta."""
+    try:
+        return (sb.table("pdfs")
+                .select("id,pdf_file,total_pages,extraction_requested_at,extraction_requested_by")
+                .eq("extracted", False).not_.is_("extraction_requested_at", "null")
+                .order("extraction_requested_at").execute().data)
+    except Exception as e:
+        raise HTTPException(503, f"colunas da fila ausentes — aplique "
+                                 f"supabase/005_fila_extracao.sql. Detalhe: {e}")
 
 
 @app.get("/api/health", tags=["infra"])
