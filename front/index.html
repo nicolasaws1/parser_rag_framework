@@ -32,6 +32,8 @@
   .sb-item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;font-size:13.5px;font-weight:500;color:#333;cursor:pointer;margin-bottom:3px;}
   .sb-item:hover{background:var(--cinza-bg);}
   .sb-item.ativo{background:var(--verde-claro);color:var(--verde);font-weight:700;}
+  .sb-item.desativado{opacity:.5;cursor:default;}
+  .sb-item.desativado:hover{background:transparent;}
   .sb-item svg{width:17px;height:17px;flex-shrink:0;}
   .sb-plan{margin:12px;padding:14px;border:1px solid var(--borda);border-radius:12px;}
   .sb-plan .barra{height:6px;background:#eee;border-radius:4px;overflow:hidden;margin-top:8px;}
@@ -318,7 +320,7 @@
   </div>
   <nav class="sb-nav">
     <div class="sb-item ativo" id="nav-home" onclick="irHome()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Home</span></div>
-    <div class="sb-item" id="nav-extract" onclick="irExtracao()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Analisar</span></div>
+    <div class="sb-item desativado" id="nav-extract" onclick="irExtracao()" title="Abra um documento na Home para analisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><span>Analisar</span></div>
     <div class="sb-item" id="nav-gpu" onclick="irExtracaoGPU()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h4M6 14h2M16 10h2M14 14h4"/></svg><span>Extração</span></div>
     <div class="sb-item" style="opacity:.5;cursor:default"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg><span>Qdrant</span></div>
   </nav>
@@ -382,17 +384,20 @@
   <!-- EXTRACT -->
 
   <div class="home" id="view-gpu" style="display:none">
-    <div class="hero" style="background:linear-gradient(135deg,#123c20,#1d5c33)">
-      <h1 style="margin:0 0 6px">Extração</h1>
-      <p style="margin:0;opacity:.9;font-size:13.5px;max-width:640px">
-        A extração roda no lado com GPU (DocLayout-YOLO + Chandra OCR 2 + Docling + PyMuPDF).
-        Este servidor não extrai — ele guarda a fila e recebe o estado de quem extrai.</p>
+    <div class="home-hero">
+      <h2>Extração</h2>
+      <p>A extração roda no lado com GPU (DocLayout-YOLO + Chandra OCR 2 + Docling + PyMuPDF).
+         Este servidor não extrai — ele guarda a fila e recebe o estado de quem extrai.</p>
+      <div class="home-badges">
+        <div class="home-badge"><div class="n" id="gpu-badge-estado">—</div><div class="l">Worker de extração</div></div>
+        <div class="home-badge"><div class="n" id="gpu-badge-fila">0</div><div class="l">Na fila</div></div>
+        <div class="home-badge"><div class="n" id="gpu-badge-sinal">—</div><div class="l">Último sinal</div></div>
+      </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px" id="gpu-cards"></div>
-    <div style="margin-top:20px">
-      <div style="font-weight:700;font-size:14px;margin-bottom:10px">Fila de extração</div>
-      <div id="gpu-fila"></div>
+    <div class="lista-topo">
+      <div class="filtros"><span class="filtro-lbl">Worker:</span><span id="gpu-detalhe" style="font-size:12.5px;color:var(--cinza)"></span></div>
     </div>
+    <div class="lista" id="gpu-fila"></div>
   </div>
   <div class="extract" id="view-extract">
     <div class="ex-toolbar">
@@ -544,6 +549,7 @@ function setNav(q){ el("nav-home").classList.toggle("ativo",q==="home");
   var g=el("nav-gpu"); if(g) g.classList.toggle("ativo",q==="gpu"); }
 function toggleSidebar(){ document.body.classList.toggle("collapsed"); }
 function irExtracao(){
+  if(docAtual===null) return;   // sem documento aberto nao ha o que analisar
   let a = docAtual;
   if(a===null || !extraidos.has(a)){ a=[...extraidos][0]; if(a===undefined) a=0; }
   abrirDoc(a);
@@ -790,6 +796,7 @@ function refletirEdicao(lay){
 }
 async function abrirDoc(i){
   docAtual=i;   // abrir NAO extrai: quem marca extraido e' o banco, na ingestao
+  el("nav-extract").classList.remove("desativado");   // libera a aba Analisar
   const d=IDX[i];
   el("view-home").style.display="none"; el("view-gpu").style.display="none"; el("view-extract").style.display="flex";
   el("topbar-tit").textContent="Analisar"; el("ex-filename").textContent=d.arquivo; setNav("extract");
@@ -1018,28 +1025,21 @@ async function atualizarGPU(){
   try{ w=await (await fetch(API+"/worker")).json(); }catch(e){ w={conectado:false,motivo:e.message}; }
   try{ fila=await (await fetch(API+"/fila")).json(); }catch(e){ fila=[]; }
   var est=w.estado||{};
-  var cor = w.conectado ? (est.rodando?"#15803d":"#0369a1") : "#b45309";
-  var titulo = w.conectado ? (est.rodando?"Extraindo agora":"Conectado, ocioso") : "Sem worker conectado";
-  var corpoW='<div style="font-size:19px;font-weight:800;color:'+cor+'">'+titulo+'</div>';
-  if(w.conectado){
-    corpoW+='<div style="font-size:12.5px;color:var(--cinza);margin-top:7px;line-height:1.7">'+
-      (est.gpu?'GPU: <b>'+esc(est.gpu)+'</b><br>':'')+
-      (est.documento?'Documento: '+esc(String(est.documento).slice(0,42))+'<br>':'')+
-      (est.pagina?'Página '+est.pagina+(est.total_paginas?' de '+est.total_paginas:'')+'<br>':'')+
-      'Último sinal há '+(w.segundos_desde||0)+'s</div>';
-  } else {
-    corpoW+='<div style="font-size:12.5px;color:var(--cinza);margin-top:7px;line-height:1.7">'+
-      esc(w.motivo||'nenhum sinal nos últimos 3 minutos')+'.<br>'+
-      'O script de extração não está reportando. Isso é o esperado quando o notebook não está rodando.</div>';
-  }
-  var corpoF='<div style="font-size:34px;font-weight:800;line-height:1">'+fila.length+'</div>'+
-    '<div style="font-size:12.5px;color:var(--cinza);margin-top:4px">documento(s) aguardando extração</div>';
-  el("gpu-cards").innerHTML=_card("Worker de extração",corpoW,cor)+_card("Fila",corpoF,"#6b7280");
+  el("gpu-badge-estado").textContent = w.conectado ? (est.rodando?"Extraindo":"Ocioso") : "Offline";
+  el("gpu-badge-fila").textContent   = fila.length;
+  el("gpu-badge-sinal").textContent  = w.conectado ? (w.segundos_desde||0)+"s" : "—";
+  el("gpu-detalhe").innerHTML = w.conectado
+    ? esc([est.gpu, est.documento && String(est.documento).slice(0,38),
+           est.pagina && ("página "+est.pagina+(est.total_paginas?" de "+est.total_paginas:""))]
+          .filter(Boolean).join(" · "))
+    : esc(w.motivo||"nenhum sinal nos últimos 3 minutos")+" — o script de extração não está reportando.";
   el("gpu-fila").innerHTML = fila.length
-    ? '<table class="log-t"><thead><tr><th>Documento</th><th>Páginas</th><th>Pedido em</th><th>Por</th></tr></thead><tbody>'+
-      fila.map(function(x){ return '<tr><td>'+esc(x.pdf_file)+'</td><td>'+(x.total_pages||0)+'</td>'+
-        '<td>'+_quando(x.extraction_requested_at)+'</td><td>'+esc(x.extraction_requested_by||"—")+'</td></tr>'; }).join("")+
-      '</tbody></table>'
+    ? fila.map(function(x){ return ''+
+        '<div class="linha"><div class="linha-doc" style="padding-left:14px">'+
+        '<div class="linha-tit">'+esc(x.pdf_file)+'</div>'+
+        '<div class="linha-meta">'+(x.total_pages||0)+' páginas · pedido em '+_quando(x.extraction_requested_at)+
+        ' · por <b>'+esc(x.extraction_requested_by||"—")+'</b></div></div>'+
+        '<div style="padding-right:16px"><span class="mini-chip fila">na fila</span></div></div>'; }).join("")
     : '<div class="md-vazio">Nada na fila. Peça a extração de um documento na Home ou ao abri-lo.</div>';
 }
 /* ── Histórico e Configs ────────────────────────────────────────────────────
