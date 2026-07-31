@@ -400,7 +400,8 @@ class EventoLog(BaseModel):
 
 EVENTOS = {"login", "logout", "documento_editado", "edicao_descartada",
            "pdf_ingerido", "pdf_removido", "extracao_solicitada",
-           "worker_heartbeat", "metadados_sincronizados", "integrante_cadastrado"}
+           "worker_heartbeat", "metadados_sincronizados", "integrante_cadastrado",
+           "integrante_alterado", "integrante_removido"}
 
 
 def registrar(evento: str, ator=None, alvo=None, detalhe=None, ip=None) -> None:
@@ -613,9 +614,9 @@ def equipe_listar(pedido: Request):
 
 @app.post("/api/equipe", tags=["equipe"])
 def equipe_criar(novo: NovoIntegrante, pedido: Request):
-    """Cadastra um integrante. SO' quem ja' tem conta pode chamar."""
+    """Cadastra um integrante. So' admin — e nunca por auto-registro."""
     from api import auth
-    quem = auth.exigir_usuario(pedido, sb)
+    quem = auth.exigir_cargo(pedido, sb, "admin")
     limitar(pedido, "edicao", "equipe")
     if novo.cargo not in auth.CARGOS:
         raise HTTPException(400, f"cargo deve ser um de {', '.join(auth.CARGOS)}")
@@ -636,6 +637,98 @@ def equipe_criar(novo: NovoIntegrante, pedido: Request):
     return {"id": uid, "email": novo.email,
             "nome": novo.nome or novo.email.split("@")[0], "cargo": novo.cargo,
             "criado_por": quem["nome"]}
+
+
+class EdicaoIntegrante(BaseModel):
+    nome: str | None = None
+    cargo: str | None = None
+    senha: str | None = None          # opcional: redefine a senha
+
+
+def _admins_restantes(excluindo: str | None = None) -> int:
+    perfis = sb.table("profiles").select("id,role").eq("role", "admin").execute().data
+    return len([p for p in perfis if p["id"] != excluindo])
+
+
+@app.patch("/api/equipe/{uid}", tags=["equipe"])
+def equipe_editar(uid: str, mudanca: EdicaoIntegrante, pedido: Request):
+    """Altera nome, cargo ou senha de um integrante. Só admin."""
+    from api import auth
+    quem = auth.exigir_cargo(pedido, sb, "admin")
+    limitar(pedido, "edicao", "equipe")
+
+    atual = sb.table("profiles").select("*").eq("id", uid).execute().data
+    if not atual:
+        raise HTTPException(404, "integrante não encontrado")
+    atual = atual[0]
+
+    if mudanca.cargo is not None:
+        if mudanca.cargo not in auth.CARGOS:
+            raise HTTPException(400, f"cargo deve ser um de {', '.join(auth.CARGOS)}")
+        # rebaixar o ultimo admin deixaria o sistema sem quem cadastra ou remove
+        if atual.get("role") == "admin" and mudanca.cargo != "admin" \
+                and _admins_restantes(excluindo=uid) == 0:
+            raise HTTPException(409, "este é o último administrador; promova outro antes")
+
+    if mudanca.senha is not None:
+        if len(mudanca.senha) < 8:
+            raise HTTPException(400, "a senha precisa de pelo menos 8 caracteres")
+        try:
+            sb.auth.admin.update_user_by_id(uid, {"password": mudanca.senha})
+        except Exception as e:
+            raise HTTPException(400, f"não deu para trocar a senha: {str(e)[:140]}")
+
+    campos = {}
+    if mudanca.nome is not None:
+        campos["name"] = mudanca.nome.strip() or atual.get("name")
+    if mudanca.cargo is not None:
+        campos["role"] = mudanca.cargo
+    if campos:
+        sb.table("profiles").update(campos).eq("id", uid).execute()
+
+    registrar("integrante_alterado", quem["nome"], uid,
+              {"campos": sorted(set(list(campos) + (["senha"] if mudanca.senha else []))),
+               "de": {"name": atual.get("name"), "role": atual.get("role")}},
+              pedido.client.host if pedido.client else None)
+    novo = sb.table("profiles").select("*").eq("id", uid).execute().data
+    return novo[0] if novo else {}
+
+
+@app.delete("/api/equipe/{uid}", tags=["equipe"])
+def equipe_remover(uid: str, pedido: Request):
+    """Remove um integrante. Só admin, e com duas travas.
+
+    Não deixa remover a si mesmo nem o último administrador: nos dois casos
+    ninguém mais conseguiria cadastrar ou remover ninguém, e a recuperação
+    exigiria mexer no painel do Supabase.
+    """
+    from api import auth
+    quem = auth.exigir_cargo(pedido, sb, "admin")
+    limitar(pedido, "edicao", "equipe")
+
+    if uid == quem["id"]:
+        raise HTTPException(409, "você não pode remover a si mesmo")
+    alvo = sb.table("profiles").select("*").eq("id", uid).execute().data
+    if not alvo:
+        raise HTTPException(404, "integrante não encontrado")
+    alvo = alvo[0]
+    if alvo.get("role") == "admin" and _admins_restantes(excluindo=uid) == 0:
+        raise HTTPException(409, "este é o último administrador; promova outro antes")
+
+    # o perfil sai ANTES do usuário do Auth: profiles.id referencia auth.users, e
+    # apagar o Auth primeiro devolve "Database error deleting user" por violar a
+    # chave estrangeira
+    sb.table("profiles").delete().eq("id", uid).execute()
+    try:
+        sb.auth.admin.delete_user(uid)
+    except Exception as e:
+        # o perfil já saiu: a pessoa perde o acesso ao site de qualquer forma,
+        # mas a credencial fica órfã no Auth e precisa ser limpa no painel
+        raise HTTPException(500, f"perfil removido, mas a credencial ficou no Auth: {str(e)[:120]}")
+    registrar("integrante_removido", quem["nome"], uid,
+              {"nome": alvo.get("name"), "cargo": alvo.get("role")},
+              pedido.client.host if pedido.client else None)
+    return {"removido": True, "nome": alvo.get("name")}
 
 
 @app.get("/api/health", tags=["infra"])

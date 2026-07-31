@@ -154,6 +154,10 @@
   .cfg-l{display:flex;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid #f1f1f1;font-size:13px;}
   .cfg-l span:first-child{color:var(--cinza);}
   .mini-chip.fila{background:#fef3c7;color:#92400e;}
+  .eq-acao{padding:5px 11px;border:1px solid var(--borda);border-radius:7px;background:#fff;font-size:12px;cursor:pointer;font-family:inherit;}
+  .eq-acao:hover{background:var(--cinza-bg);}
+  .eq-acao.perigo{color:#b91c1c;border-color:#fecaca;}
+  .eq-acao.perigo:hover{background:#fef2f2;}
   .eq-lbl{font-size:12px;font-weight:600;color:var(--cinza);display:block;margin-bottom:3px;}
   .eq-inp{width:100%;padding:9px 11px;border:1px solid var(--borda);border-radius:8px;box-sizing:border-box;font-size:13.5px;font-family:inherit;}
   .eq-inp:focus{outline:2px solid var(--verde);outline-offset:1px;}
@@ -407,7 +411,7 @@
     </div>
     <div class="lista-topo">
       <div class="filtros"><span class="filtro-lbl">Integrantes</span></div>
-      <div class="filtros"><button class="filtro ativo" onclick="formIntegrante(true)">+ Cadastrar integrante</button></div>
+      <div class="filtros"><button class="filtro ativo" id="eq-btn-novo" onclick="formIntegrante(true)">+ Cadastrar integrante</button></div>
     </div>
     <div id="eq-form" style="display:none;background:#fff;border:1px solid var(--borda);border-radius:12px;padding:18px 20px;margin-bottom:12px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -1144,6 +1148,46 @@ async function sincronizarCuradoria(){
   }finally{ b.disabled=false; b.textContent=antes; }
 }
 
+
+var EQUIPE = [], MEU_ID = null;
+/* Editar e remover: so' admin, e o backend confere de novo — o botao escondido
+   no front nao e' protecao, e' conveniencia. */
+async function editarIntegrante(uid){
+  var p = (EQUIPE||[]).filter(function(x){return x.id===uid;})[0] || {};
+  var nome = prompt("Nome de "+(p.name||"integrante")+":", p.name||"");
+  if(nome===null) return;
+  var cargo = prompt("Cargo (admin, curador ou leitor):", p.role||"curador");
+  if(cargo===null) return;
+  cargo = String(cargo).trim().toLowerCase();
+  var senha = prompt("Nova senha (deixe em branco para nao trocar):", "");
+  if(senha===null) return;
+  var corpo = {nome: nome.trim(), cargo: cargo};
+  if(senha.trim()) corpo.senha = senha.trim();
+  try{
+    var r = await apiFetch(API+"/equipe/"+uid, {method:"PATCH",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify(corpo)});
+    var j = await r.json();
+    if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    await carregarEquipe();
+    abrirPainel("Integrante atualizado",
+      '<div style="font-size:13px;line-height:1.8"><b>'+esc(j.name||nome)+'</b> — '+esc(j.role||cargo)+'</div>'+
+      (corpo.senha ? '<div style="margin-top:12px;padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;'+
+        'border-radius:8px;font-size:12px;color:#7c2d12">A senha foi trocada. Passe a nova por um canal seguro.</div>' : ''));
+  }catch(e){
+    abrirPainel("Nao deu para editar", '<p style="font-size:13px">'+esc(String(e.message||e))+'</p>');
+  }
+}
+async function removerIntegrante(uid, nome){
+  if(!confirm('Remover "'+nome+'"?\n\nA conta deixa de existir e a pessoa perde o acesso. Nao da para desfazer.')) return;
+  try{
+    var r = await apiFetch(API+"/equipe/"+uid, {method:"DELETE"});
+    var j = await r.json();
+    if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    await carregarEquipe();
+  }catch(e){
+    abrirPainel("Nao deu para remover", '<p style="font-size:13px">'+esc(String(e.message||e))+'</p>');
+  }
+}
 /* ── Equipe ──
    Cadastro INTERNO: o endpoint exige token, entao so' quem ja' esta' dentro cria
    conta nova. A tela de login nao tem "criar conta" de proposito. */
@@ -1151,6 +1195,7 @@ async function irEquipe(){
   el("view-home").style.display="none"; el("view-extract").style.display="none";
   el("view-gpu").style.display="none"; el("view-equipe").style.display="block";
   el("topbar-tit").textContent="Equipe"; setNav("equipe");
+  var bn=el("eq-btn-novo"); if(bn) bn.style.display = (CARGO==="admin") ? "" : "none";
   formIntegrante(false); await carregarEquipe();
 }
 function formIntegrante(mostrar){
@@ -1164,18 +1209,26 @@ async function carregarEquipe(){
     var r=await apiFetch(API+"/equipe");
     if(!r.ok){ var e1=await r.json(); throw new Error(e1.detail||("HTTP "+r.status)); }
     var eq=await r.json();
+    EQUIPE=eq;
     el("eq-total").textContent=eq.length;
     el("eq-admins").textContent=eq.filter(function(p){return p.role==="admin";}).length;
     var cor={admin:["#166534","#dcfce7"],curador:["#1e40af","#dbeafe"],leitor:["#6b7280","#f3f4f6"]};
     lista.innerHTML = eq.length ? eq.map(function(p){
       var c=cor[p.role]||cor.leitor;
       var ini=(p.name||"?").slice(0,2).toUpperCase();
+      var eu = (p.id===MEU_ID);
+      var acoes = (CARGO==="admin")
+        ? '<button class="eq-acao" onclick="editarIntegrante(\''+p.id+'\')">Editar</button>'+
+          (eu ? '' : '<button class="eq-acao perigo" onclick="removerIntegrante(\''+p.id+'\',\''+
+                     esc(p.name||"").replace(/'/g,"") + '\')">Remover</button>')
+        : '';
       return '<div class="linha"><div style="display:flex;align-items:center;gap:12px;padding:14px 16px;flex:1">'+
         '<div style="width:34px;height:34px;border-radius:50%;background:'+c[1]+';color:'+c[0]+
         ';display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px">'+esc(ini)+'</div>'+
-        '<div><div class="linha-tit">'+esc(p.name||"-")+'</div>'+
+        '<div><div class="linha-tit">'+esc(p.name||"-")+(eu?' <span style="font-size:11px;color:var(--cinza)">(voce)</span>':'')+'</div>'+
         '<div class="linha-meta">'+esc(String(p.id||"").slice(0,8))+'...</div></div></div>'+
-        '<div style="padding-right:16px"><span class="mini-chip" style="background:'+c[1]+';color:'+c[0]+'">'+
+        '<div style="display:flex;align-items:center;gap:8px;padding-right:16px">'+acoes+
+        '<span class="mini-chip" style="background:'+c[1]+';color:'+c[0]+'">'+
         esc(p.role||"leitor")+'</span></div></div>';
     }).join("") : '<div class="md-vazio">Ninguem cadastrado.</div>';
   }catch(e){
@@ -1195,7 +1248,8 @@ async function cadastrarIntegrante(){
     var j=await r.json();
     if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
     el("eq-nome").value=""; el("eq-email").value=""; el("eq-senha").value="";
-    formIntegrante(false); await carregarEquipe();
+    var bn=el("eq-btn-novo"); if(bn) bn.style.display = (CARGO==="admin") ? "" : "none";
+  formIntegrante(false); await carregarEquipe();
     abrirPainel("Integrante cadastrado",
       '<div style="font-size:13px;line-height:1.8"><b>'+esc(j.nome)+'</b> ('+esc(j.cargo)+')<br>'+
       esc(j.email)+'</div>'+
@@ -1677,7 +1731,7 @@ async function entrar(e){
       body:JSON.stringify({email:email, senha:senha})});
     var j=await r.json();
     if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
-    TOKEN=j.token; USUARIO=j.usuario.nome; CARGO=j.usuario.cargo||"leitor";
+    TOKEN=j.token; USUARIO=j.usuario.nome; CARGO=j.usuario.cargo||"leitor"; MEU_ID=j.usuario.id;
     try{ sessionStorage.setItem("sb100_tok", TOKEN); }catch(_){}
     el("view-login").style.display="none";
     var av=document.querySelector(".sb-user .av"), nome=document.querySelector(".sb-user > div:last-child");
