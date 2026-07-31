@@ -401,7 +401,7 @@ class EventoLog(BaseModel):
 EVENTOS = {"login", "logout", "documento_editado", "edicao_descartada",
            "pdf_ingerido", "pdf_removido", "extracao_solicitada",
            "worker_heartbeat", "metadados_sincronizados", "integrante_cadastrado",
-           "integrante_alterado", "integrante_removido"}
+           "integrante_alterado", "integrante_removido", "conta_alterada"}
 
 
 def registrar(evento: str, ator=None, alvo=None, detalhe=None, ip=None) -> None:
@@ -729,6 +729,73 @@ def equipe_remover(uid: str, pedido: Request):
               {"nome": alvo.get("name"), "cargo": alvo.get("role")},
               pedido.client.host if pedido.client else None)
     return {"removido": True, "nome": alvo.get("name")}
+
+
+class MinhaConta(BaseModel):
+    nome: str | None = None
+    email: str | None = None
+    senha_nova: str | None = None
+    senha_atual: str | None = None      # exigida para trocar e-mail ou senha
+
+
+@app.patch("/api/auth/eu", tags=["equipe"])
+def auth_editar_eu(dados: MinhaConta, pedido: Request):
+    """Cada um edita a propria conta.
+
+    Trocar e-mail ou senha exige a senha ATUAL. E' o padrao de qualquer serviço
+    sério: sem isso, um computador deixado aberto vira sequestro de conta.
+    Trocar so' o nome nao exige, porque nao muda quem pode entrar.
+    """
+    from api import auth
+    eu = auth.exigir_usuario(pedido, sb)
+    limitar(pedido, "edicao", "conta")
+
+    sensivel = bool(dados.email or dados.senha_nova)
+    if sensivel:
+        if not dados.senha_atual:
+            raise HTTPException(400, "informe a senha atual para alterar e-mail ou senha")
+        try:
+            auth.entrar(eu["email"], dados.senha_atual)     # reautentica
+        except HTTPException:
+            raise HTTPException(403, "a senha atual está incorreta")
+
+    mudou = []
+    if dados.senha_nova:
+        if len(dados.senha_nova) < 8:
+            raise HTTPException(400, "a nova senha precisa de pelo menos 8 caracteres")
+        if dados.senha_nova == dados.senha_atual:
+            raise HTTPException(400, "a nova senha é igual à atual")
+        try:
+            sb.auth.admin.update_user_by_id(eu["id"], {"password": dados.senha_nova})
+        except Exception as e:
+            raise HTTPException(400, f"não deu para trocar a senha: {str(e)[:140]}")
+        mudou.append("senha")
+
+    if dados.email and dados.email.strip().lower() != (eu["email"] or "").lower():
+        try:
+            sb.auth.admin.update_user_by_id(
+                eu["id"], {"email": dados.email.strip(), "email_confirm": True})
+        except Exception as e:
+            raise HTTPException(400, f"não deu para trocar o e-mail: {str(e)[:140]}")
+        mudou.append("e-mail")
+
+    if dados.nome is not None and dados.nome.strip():
+        sb.table("profiles").update({"name": dados.nome.strip()}).eq("id", eu["id"]).execute()
+        mudou.append("nome")
+
+    if not mudou:
+        raise HTTPException(400, "nada para alterar")
+
+    registrar("conta_alterada", eu["nome"], eu["id"], {"campos": mudou},
+              pedido.client.host if pedido.client else None)
+    perfil = sb.table("profiles").select("*").eq("id", eu["id"]).execute().data
+    novo_email = dados.email.strip() if "e-mail" in mudou else eu["email"]
+    return {"alterado": mudou,
+            "usuario": {"id": eu["id"], "email": novo_email,
+                        "nome": (perfil[0].get("name") if perfil else eu["nome"]),
+                        "cargo": (perfil[0].get("role") if perfil else eu["cargo"])},
+            # trocar senha ou e-mail invalida a sessao no Supabase
+            "refazer_login": "senha" in mudou or "e-mail" in mudou}
 
 
 @app.get("/api/health", tags=["infra"])

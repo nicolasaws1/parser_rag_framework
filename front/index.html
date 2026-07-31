@@ -17,7 +17,7 @@
   body{background:var(--cinza-bg);color:#1a1a1a;display:flex;height:100vh;overflow:hidden;}
 
   /* SIDEBAR */
-  .sidebar{width:230px;background:#fff;border-right:1px solid var(--borda);display:flex;flex-direction:column;flex-shrink:0;transition:width .22s ease,margin .22s ease;overflow:hidden;}
+  .sidebar{position:relative;width:230px;background:#fff;border-right:1px solid var(--borda);display:flex;flex-direction:column;flex-shrink:0;transition:width .22s ease,margin .22s ease;overflow:hidden;}
   .sb-brand{display:flex;align-items:center;gap:10px;padding:18px;border-bottom:1px solid var(--borda);}
   .sb-logo{width:34px;height:34px;border-radius:9px;background:var(--verde);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
   .sb-brand-txt{flex:1;min-width:0;}
@@ -154,6 +154,24 @@
   .cfg-l{display:flex;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid #f1f1f1;font-size:13px;}
   .cfg-l span:first-child{color:var(--cinza);}
   .mini-chip.fila{background:#fef3c7;color:#92400e;}
+  .sb-user{cursor:pointer;transition:background .12s;}
+  .sb-user:hover{background:var(--cinza-bg);}
+  .menu-conta{position:absolute;bottom:74px;left:12px;right:12px;z-index:500;background:#fff;border:1px solid var(--borda);
+    border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.16);padding:6px;}
+  .menu-cab{padding:9px 11px 10px;border-bottom:1px solid var(--borda);margin-bottom:5px;}
+  .menu-cab b{display:block;font-size:13px;}
+  .menu-cab small{color:var(--cinza);font-size:11.5px;word-break:break-all;}
+  .menu-item{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:8px;font-size:13px;cursor:pointer;}
+  .menu-item:hover{background:var(--cinza-bg);}
+  .menu-item.perigo{color:#b91c1c;}
+  .menu-item.perigo:hover{background:#fef2f2;}
+  .menu-sep{height:1px;background:var(--borda);margin:5px 0;}
+  .cf-sec{padding:16px 0;border-bottom:1px solid var(--borda);}
+  .cf-sec:last-child{border-bottom:none;}
+  .cf-sec h4{margin:0 0 3px;font-size:13.5px;}
+  .cf-sec p{margin:0 0 11px;font-size:12px;color:var(--cinza);line-height:1.5;}
+  .cf-linha{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+  .cf-msg{font-size:12.5px;min-height:17px;margin-top:7px;}
   .eq-acao{padding:5px 11px;border:1px solid var(--borda);border-radius:7px;background:#fff;font-size:12px;cursor:pointer;font-family:inherit;}
   .eq-acao:hover{background:var(--cinza-bg);}
   .eq-acao.perigo{color:#b91c1c;border-color:#fecaca;}
@@ -339,7 +357,25 @@
     <div class="barra"><span id="uso-barra"></span></div>
     <small id="uso-txt">0 pontos enviados nesta sessão</small>
   </div>
-  <div class="sb-user"><div class="av">NI</div><div>nicolas silva<br><small>nicolasaws12@gmail.com</small></div></div>
+  <div class="sb-user" id="sb-user" onclick="alternarMenuConta(event)" title="Sua conta">
+    <div class="av">--</div>
+    <div style="flex:1;min-width:0"><span id="sb-nome">—</span><br><small id="sb-sub">—</small></div>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+         stroke-linecap="round" stroke-linejoin="round" style="opacity:.5;flex-shrink:0"><polyline points="6 9 12 15 18 9"/></svg>
+  </div>
+  <div id="menu-conta" class="menu-conta" style="display:none">
+    <div class="menu-cab"><b id="mc-nome">—</b><small id="mc-email">—</small></div>
+    <div class="menu-item" onclick="abrirMinhaConta()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Minha conta</div>
+    <div class="menu-item" onclick="abrirHistorico();fecharMenuConta()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Histórico</div>
+    <div class="menu-sep"></div>
+    <div class="menu-item perigo" onclick="sair()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Sair</div>
+  </div>
 </aside>
 
 <div class="conteudo">
@@ -1188,6 +1224,93 @@ async function removerIntegrante(uid, nome){
     abrirPainel("Nao deu para remover", '<p style="font-size:13px">'+esc(String(e.message||e))+'</p>');
   }
 }
+
+/* ── conta ──
+   Menu no avatar, como em qualquer serviço: minha conta, historico e sair.
+   Trocar e-mail ou senha pede a senha ATUAL — sem isso, um computador deixado
+   aberto vira sequestro de conta. */
+var MEU_EMAIL = null;
+function alternarMenuConta(ev){
+  if(ev) ev.stopPropagation();
+  var m=el("menu-conta");
+  var abrir = m.style.display==="none";
+  m.style.display = abrir ? "block" : "none";
+  if(abrir){
+    el("mc-nome").textContent = USUARIO || "—";
+    el("mc-email").textContent = MEU_EMAIL || "";
+  }
+}
+function fecharMenuConta(){ var m=el("menu-conta"); if(m) m.style.display="none"; }
+document.addEventListener("click", function(e){
+  var m=el("menu-conta"), u=el("sb-user");
+  if(m && m.style.display!=="none" && !m.contains(e.target) && u && !u.contains(e.target)) fecharMenuConta();
+});
+function pintarUsuario(){
+  var av=document.querySelector(".sb-user .av");
+  if(av) av.textContent=((USUARIO||"US").slice(0,2)).toUpperCase();
+  var n=el("sb-nome"), sub=el("sb-sub");
+  if(n) n.textContent = USUARIO || "—";
+  if(sub) sub.textContent = (CARGO||"") + (MEU_EMAIL ? " · " + MEU_EMAIL : "");
+}
+function abrirMinhaConta(){
+  fecharMenuConta();
+  abrirPainel("Minha conta",
+    '<div class="cf-sec">'+
+      '<h4>Perfil</h4><p>Como seu nome aparece para a equipe.</p>'+
+      '<div class="cf-linha"><div><label class="eq-lbl">Nome</label>'+
+      '<input id="cf-nome" class="eq-inp" value="'+esc(USUARIO||"")+'"></div>'+
+      '<div><label class="eq-lbl">Cargo</label>'+
+      '<input class="eq-inp" value="'+esc(CARGO||"")+'" disabled title="Só um administrador altera cargos"></div></div>'+
+      '<button class="eq-btn" onclick="salvarConta(\'nome\')">Salvar nome</button>'+
+      '<div class="cf-msg" id="cf-msg-nome"></div>'+
+    '</div>'+
+    '<div class="cf-sec">'+
+      '<h4>E-mail</h4><p>É com ele que você entra. Exige a senha atual.</p>'+
+      '<div class="cf-linha"><div><label class="eq-lbl">Novo e-mail</label>'+
+      '<input id="cf-email" type="email" class="eq-inp" value="'+esc(MEU_EMAIL||"")+'"></div>'+
+      '<div><label class="eq-lbl">Senha atual</label>'+
+      '<input id="cf-senha-email" type="password" class="eq-inp" autocomplete="current-password"></div></div>'+
+      '<button class="eq-btn" onclick="salvarConta(\'email\')">Alterar e-mail</button>'+
+      '<div class="cf-msg" id="cf-msg-email"></div>'+
+    '</div>'+
+    '<div class="cf-sec">'+
+      '<h4>Senha</h4><p>Mínimo de 8 caracteres. Você precisará entrar de novo.</p>'+
+      '<div class="cf-linha"><div><label class="eq-lbl">Senha atual</label>'+
+      '<input id="cf-atual" type="password" class="eq-inp" autocomplete="current-password"></div>'+
+      '<div><label class="eq-lbl">Nova senha</label>'+
+      '<input id="cf-nova" type="password" class="eq-inp" autocomplete="new-password"></div></div>'+
+      '<button class="eq-btn" onclick="salvarConta(\'senha\')">Alterar senha</button>'+
+      '<div class="cf-msg" id="cf-msg-senha"></div>'+
+    '</div>');
+}
+async function salvarConta(qual){
+  var corpo={}, alvo="cf-msg-"+qual;
+  if(qual==="nome"){ corpo.nome=el("cf-nome").value.trim();
+    if(!corpo.nome){ msgConta(alvo,"Informe um nome.",true); return; } }
+  if(qual==="email"){ corpo.email=el("cf-email").value.trim(); corpo.senha_atual=el("cf-senha-email").value;
+    if(!corpo.email||!corpo.senha_atual){ msgConta(alvo,"Preencha o e-mail e a senha atual.",true); return; } }
+  if(qual==="senha"){ corpo.senha_nova=el("cf-nova").value; corpo.senha_atual=el("cf-atual").value;
+    if(!corpo.senha_nova||!corpo.senha_atual){ msgConta(alvo,"Preencha as duas senhas.",true); return; }
+    if(corpo.senha_nova.length<8){ msgConta(alvo,"A nova senha precisa de pelo menos 8 caracteres.",true); return; } }
+  msgConta(alvo,"Salvando…",false);
+  try{
+    var r=await apiFetch(API+"/auth/eu",{method:"PATCH",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify(corpo)});
+    var j=await r.json();
+    if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    USUARIO=j.usuario.nome; MEU_EMAIL=j.usuario.email; pintarUsuario();
+    if(j.refazer_login){
+      msgConta(alvo,"Alterado. Entre de novo com os dados novos.",false);
+      setTimeout(function(){ fecharPainel(); sair(true); }, 1600);
+    } else {
+      msgConta(alvo,"Alterado.",false);
+    }
+  }catch(e){ msgConta(alvo,String(e.message||e),true); }
+}
+function msgConta(id,txt,erro){
+  var e=el(id); if(!e) return;
+  e.textContent=txt; e.style.color = erro ? "var(--vermelho)" : "#15803d";
+}
 /* ── Equipe ──
    Cadastro INTERNO: o endpoint exige token, entao so' quem ja' esta' dentro cria
    conta nova. A tela de login nao tem "criar conta" de proposito. */
@@ -1733,10 +1856,9 @@ async function entrar(e){
     if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
     TOKEN=j.token; USUARIO=j.usuario.nome; CARGO=j.usuario.cargo||"leitor"; MEU_ID=j.usuario.id;
     try{ sessionStorage.setItem("sb100_tok", TOKEN); }catch(_){}
+    MEU_EMAIL=j.usuario.email;
     el("view-login").style.display="none";
-    var av=document.querySelector(".sb-user .av"), nome=document.querySelector(".sb-user > div:last-child");
-    if(av) av.textContent=(USUARIO.slice(0,2)||"US").toUpperCase();
-    if(nome) nome.innerHTML=esc(USUARIO)+"<br><small>"+esc(CARGO)+" · <a href='#' onclick='sair();return false' style='color:inherit'>sair</a></small>";
+    pintarUsuario();
     iniciar();
   }catch(err){
     erro.textContent = String(err.message||err);
@@ -1745,7 +1867,7 @@ async function entrar(e){
 async function sair(expirou){
   if(!expirou) try{ await apiFetch(API+"/log",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({evento:"logout",ator:USUARIO})}); }catch(_){}
-  TOKEN=null; USUARIO=null; CARGO=null;
+  TOKEN=null; USUARIO=null; CARGO=null; MEU_EMAIL=null; fecharMenuConta();
   try{ sessionStorage.removeItem("sb100_tok"); }catch(_){}
   el("view-login").style.display="flex";
   el("login-erro").textContent = expirou ? "Sua sessão expirou. Entre de novo." : "";
