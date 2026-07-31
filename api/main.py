@@ -400,7 +400,7 @@ class EventoLog(BaseModel):
 
 EVENTOS = {"login", "logout", "documento_editado", "edicao_descartada",
            "pdf_ingerido", "pdf_removido", "extracao_solicitada",
-           "worker_heartbeat", "metadados_sincronizados"}
+           "worker_heartbeat", "metadados_sincronizados", "integrante_cadastrado"}
 
 
 def registrar(evento: str, ator=None, alvo=None, detalhe=None, ip=None) -> None:
@@ -564,6 +564,78 @@ def curadoria_sincronizar(pedido: Request, gravar: bool = True):
               {k: v for k, v in resumo.items() if k != "novos_exemplos"},
               pedido.client.host if pedido.client else None)
     return resumo
+
+
+# ── equipe (login e cadastro interno) ────────────────────────────────────────
+# Nao ha' auto-registro: quem entra e' quem ja' foi cadastrado por alguem de
+# dentro. Ver api/auth.py.
+
+class Credencial(BaseModel):
+    email: str
+    senha: str
+
+
+class NovoIntegrante(BaseModel):
+    email: str
+    senha: str
+    nome: str | None = None
+    cargo: str = "curador"
+
+
+@app.post("/api/auth/login", tags=["equipe"])
+def auth_login(cred: Credencial, pedido: Request):
+    from api import auth
+    limitar(pedido, "edicao", "login")        # trava tentativa em laco
+    r = auth.entrar(cred.email, cred.senha)
+    perfil = sb.table("profiles").select("*").eq("id", r["usuario"]["id"]).execute().data
+    r["usuario"]["nome"] = (perfil[0].get("name") if perfil else None) or cred.email.split("@")[0]
+    r["usuario"]["cargo"] = (perfil[0].get("role") if perfil else None) or "leitor"
+    registrar("login", r["usuario"]["nome"], None, {"email": cred.email},
+              pedido.client.host if pedido.client else None)
+    return r
+
+
+@app.get("/api/auth/eu", tags=["equipe"])
+def auth_eu(pedido: Request):
+    """Quem sou eu. O front usa para saber se a sessao ainda vale."""
+    from api import auth
+    u = auth.usuario_do(pedido, sb)
+    return {"autenticado": bool(u), "usuario": u}
+
+
+@app.get("/api/equipe", tags=["equipe"])
+def equipe_listar(pedido: Request):
+    from api import auth
+    auth.exigir_usuario(pedido, sb)
+    perfis = sb.table("profiles").select("*").execute().data
+    return sorted(perfis, key=lambda p: (p.get("role") or "", p.get("name") or ""))
+
+
+@app.post("/api/equipe", tags=["equipe"])
+def equipe_criar(novo: NovoIntegrante, pedido: Request):
+    """Cadastra um integrante. SO' quem ja' tem conta pode chamar."""
+    from api import auth
+    quem = auth.exigir_usuario(pedido, sb)
+    limitar(pedido, "edicao", "equipe")
+    if novo.cargo not in auth.CARGOS:
+        raise HTTPException(400, f"cargo deve ser um de {', '.join(auth.CARGOS)}")
+    if len(novo.senha or "") < 8:
+        raise HTTPException(400, "a senha precisa de pelo menos 8 caracteres")
+    try:
+        criado = sb.auth.admin.create_user({
+            "email": novo.email, "password": novo.senha, "email_confirm": True})
+    except Exception as e:
+        raise HTTPException(400, f"não deu para criar: {str(e)[:160]}")
+    uid = criado.user.id
+    sb.table("profiles").upsert({"id": uid,
+                                 "name": novo.nome or novo.email.split("@")[0],
+                                 "role": novo.cargo}).execute()
+    registrar("integrante_cadastrado", quem["nome"], uid,
+              {"email": novo.email, "cargo": novo.cargo},
+              pedido.client.host if pedido.client else None)
+    return {"id": uid, "email": novo.email,
+            "nome": novo.nome or novo.email.split("@")[0], "cargo": novo.cargo,
+            "criado_por": quem["nome"]}
 
 
 @app.get("/api/health", tags=["infra"])

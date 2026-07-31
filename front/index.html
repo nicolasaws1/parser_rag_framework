@@ -154,6 +154,11 @@
   .cfg-l{display:flex;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid #f1f1f1;font-size:13px;}
   .cfg-l span:first-child{color:var(--cinza);}
   .mini-chip.fila{background:#fef3c7;color:#92400e;}
+  .eq-lbl{font-size:12px;font-weight:600;color:var(--cinza);display:block;margin-bottom:3px;}
+  .eq-inp{width:100%;padding:9px 11px;border:1px solid var(--borda);border-radius:8px;box-sizing:border-box;font-size:13.5px;font-family:inherit;}
+  .eq-inp:focus{outline:2px solid var(--verde);outline-offset:1px;}
+  .eq-btn{padding:10px 18px;border:none;border-radius:9px;background:var(--verde);color:#fff;font-weight:700;cursor:pointer;font-size:13px;}
+  .eq-btn2{padding:10px 18px;border:1px solid var(--borda);border-radius:9px;background:#fff;cursor:pointer;font-size:13px;}
   .sel-ordem{border:1px solid var(--borda);border-radius:20px;padding:5px 10px;font-size:12px;font-weight:600;background:#fff;cursor:pointer;color:#1a1a1a;font-family:inherit;}
   .sel-ordem:focus{outline:2px solid var(--verde);outline-offset:1px;}
   /* login (antes da home) */
@@ -301,14 +306,14 @@
     <div class="login-tit"><b>Vetorização Cientométrica</b><small>SQUAD 2</small></div>
     <div class="login-sub">Acesse a plataforma</div>
     <form class="login-form" onsubmit="entrar(event)">
-      <label>Usuário</label>
-      <input id="login-user" type="text" autocomplete="username" placeholder="seu usuário" autofocus>
+      <label>E-mail</label>
+      <input id="login-user" type="text" autocomplete="username" placeholder="voce@exemplo.com" autocomplete="username" autofocus>
       <label>Senha</label>
       <input id="login-pass" type="password" autocomplete="current-password" placeholder="sua senha">
       <div class="login-erro" id="login-erro"></div>
       <button type="submit" class="login-btn">Entrar</button>
     </form>
-    <div class="login-nota">Protótipo de front — a autenticação real fica no backend (senha com hash).</div>
+    <div class="login-nota">Não há auto-cadastro. Peça acesso a alguém da equipe.</div>
   </div>
 </div>
 
@@ -323,6 +328,7 @@
     <div class="sb-item desativado" id="nav-extract" onclick="irExtracao()" title="Abra um documento na Home para analisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><span>Analisar</span></div>
     <div class="sb-item" id="nav-gpu" onclick="irExtracaoGPU()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h4M6 14h2M16 10h2M14 14h4"/></svg><span>Extração</span></div>
     <div class="sb-item" style="opacity:.5;cursor:default"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg><span>Qdrant</span></div>
+    <div class="sb-item" id="nav-equipe" onclick="irEquipe()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Equipe</span></div>
   </nav>
   <div class="sb-plan">
     <small>Uso — collection <b style="color:var(--verde)">sb100</b></small>
@@ -388,6 +394,44 @@
 
   <!-- EXTRACT -->
 
+
+  <div class="home" id="view-equipe" style="display:none">
+    <div class="home-hero">
+      <h2>Equipe</h2>
+      <p>Quem tem acesso a esta plataforma. O cadastro e' interno: nao existe auto-registro
+         na tela de login — so' quem ja' tem conta cadastra outra pessoa.</p>
+      <div class="home-badges">
+        <div class="home-badge"><div class="n" id="eq-total">0</div><div class="l">Integrantes</div></div>
+        <div class="home-badge"><div class="n" id="eq-admins">0</div><div class="l">Administradores</div></div>
+      </div>
+    </div>
+    <div class="lista-topo">
+      <div class="filtros"><span class="filtro-lbl">Integrantes</span></div>
+      <div class="filtros"><button class="filtro ativo" onclick="formIntegrante(true)">+ Cadastrar integrante</button></div>
+    </div>
+    <div id="eq-form" style="display:none;background:#fff;border:1px solid var(--borda);border-radius:12px;padding:18px 20px;margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div><label class="eq-lbl">Nome</label>
+          <input id="eq-nome" class="eq-inp" placeholder="Nome da pessoa"></div>
+        <div><label class="eq-lbl">E-mail</label>
+          <input id="eq-email" type="email" class="eq-inp" placeholder="pessoa@exemplo.com"></div>
+        <div><label class="eq-lbl">Senha provisoria (min. 8)</label>
+          <input id="eq-senha" type="text" class="eq-inp" placeholder="a pessoa troca depois"></div>
+        <div><label class="eq-lbl">Cargo</label>
+          <select id="eq-cargo" class="eq-inp">
+            <option value="curador">Curador — le e edita documentos</option>
+            <option value="admin">Admin — tudo, inclusive cadastrar</option>
+            <option value="leitor">Leitor — so consulta</option>
+          </select></div>
+      </div>
+      <div id="eq-erro" style="min-height:18px;font-size:12.5px;color:var(--vermelho);margin-top:8px"></div>
+      <div style="display:flex;gap:8px">
+        <button onclick="cadastrarIntegrante()" id="eq-salvar" class="eq-btn">Cadastrar</button>
+        <button onclick="formIntegrante(false)" class="eq-btn2">Cancelar</button>
+      </div>
+    </div>
+    <div class="lista" id="eq-lista"></div>
+  </div>
   <div class="home" id="view-gpu" style="display:none">
     <div class="home-hero">
       <h2>Extração</h2>
@@ -505,7 +549,7 @@ function _resumo(pgs){
 
 /* --- chamadas à API --- */
 async function carregarDocumentos(){
-  const r = await fetch(API+"/documents");
+  const r = await apiFetch(API+"/documents");
   if(!r.ok) throw new Error("GET /api/documents -> HTTP "+r.status);
   IDX = (await r.json()).map(d=>({
     id:d.id, slug:_slugDe(d.pdf_file), arquivo:d.pdf_file,
@@ -524,7 +568,7 @@ async function carregarDocumentos(){
 async function carregarDoc(i){
   const d = IDX[i];
   if(DOCS[d.slug]) return DOCS[d.slug];                 // cache: só busca uma vez
-  const r = await fetch(API+"/document/"+d.id);
+  const r = await apiFetch(API+"/document/"+d.id);
   if(!r.ok) throw new Error("GET /api/document -> HTTP "+r.status);
   const doc = await r.json();
   const paginas = (doc.paginas||[]).map(p=>({
@@ -551,7 +595,8 @@ const el = id => document.getElementById(id);
 /* ── NAV / SIDEBAR ── */
 function setNav(q){ el("nav-home").classList.toggle("ativo",q==="home");
   el("nav-extract").classList.toggle("ativo",q==="extract");
-  var g=el("nav-gpu"); if(g) g.classList.toggle("ativo",q==="gpu"); }
+  var g=el("nav-gpu"); if(g) g.classList.toggle("ativo",q==="gpu");
+  var eqn=el("nav-equipe"); if(eqn) eqn.classList.toggle("ativo",q==="equipe"); }
 function toggleSidebar(){ document.body.classList.toggle("collapsed"); }
 function irExtracao(){
   if(docAtual===null) return;   // sem documento aberto nao ha o que analisar
@@ -740,7 +785,7 @@ async function pedirExtracao(i){
   var d=IDX[i], b=el("btn-extrair-um");
   if(b){ b.disabled=true; b.textContent="Solicitando…"; }
   try{
-    var r=await fetch(API+"/document/"+d.id+"/extrair",{method:"POST",
+    var r=await apiFetch(API+"/document/"+d.id+"/extrair",{method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({solicitado_por:USUARIO})});
     if(!r.ok) throw new Error("HTTP "+r.status+" — "+(await r.text()).slice(0,120));
@@ -763,7 +808,7 @@ async function analisarSelecionados(){
     if(extraidos.has(i)){ selecionados.delete(i); jaFeitos++; continue; }
     var d=IDX[i];
     try{
-      var r=await fetch(API+"/document/"+d.id+"/extrair", {method:"POST",
+      var r=await apiFetch(API+"/document/"+d.id+"/extrair", {method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({solicitado_por:USUARIO})});
       if(!r.ok){ falhas.push(d.arquivo+": HTTP "+r.status); continue; }
@@ -799,7 +844,7 @@ function analisarUm(i){
 }
 
 /* ── HOME/EXTRACT switch ── */
-function irHome(){ el("view-home").style.display="block"; el("view-extract").style.display="none"; el("view-gpu").style.display="none"; el("topbar-tit").textContent="Home"; setNav("home"); renderHome(); }
+function irHome(){ el("view-home").style.display="block"; el("view-extract").style.display="none"; el("view-gpu").style.display="none"; el("view-equipe").style.display="none"; el("topbar-tit").textContent="Home"; setNav("home"); renderHome(); }
 
 function refletirEdicao(lay){
   var b=el("btn-descartar");
@@ -810,7 +855,7 @@ async function abrirDoc(i){
   docAtual=i;   // abrir NAO extrai: quem marca extraido e' o banco, na ingestao
   el("nav-extract").classList.remove("desativado");   // libera a aba Analisar
   const d=IDX[i];
-  el("view-home").style.display="none"; el("view-gpu").style.display="none"; el("view-extract").style.display="flex";
+  el("view-home").style.display="none"; el("view-gpu").style.display="none"; el("view-equipe").style.display="none"; el("view-extract").style.display="flex";
   el("topbar-tit").textContent="Analisar"; el("ex-filename").textContent=d.arquivo; setNav("extract");
   paginaAtual=1; legFiltro="tudo";
   if(!d.extraido){ mostrarNaoExtraido(d, i); return; }
@@ -830,7 +875,7 @@ async function garantirBlocos(pg){
   if(!pg || pg.blocos!==null) return pg;
   var d=IDX[docAtual];
   try{
-    var r=await fetch(API+"/document/"+d.id+"/pagina/"+pg.n);
+    var r=await apiFetch(API+"/document/"+d.id+"/pagina/"+pg.n);
     if(!r.ok) throw new Error("HTTP "+r.status);
     var j=await r.json();
     pg.blocos=j.blocos||[]; pg.counts=_counts(pg.blocos);
@@ -965,7 +1010,7 @@ async function enviarEdicao(){
   if(!corpo.layout.length){ _persistPend=false; marcarEstado(""); return; }
   marcarEstado("salvando");
   try{
-    var r=await fetch(API+"/document/"+d.id+"/edicao",
+    var r=await apiFetch(API+"/document/"+d.id+"/edicao",
       {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(corpo)});
     if(r.status===429){
       var espera=parseInt(r.headers.get("Retry-After")||"20",10);
@@ -986,7 +1031,7 @@ async function descartarEdicao(){
   var d=IDX[docAtual];
   if(!confirm("Descartar as alterações e voltar ao texto que a extração produziu?")) return;
   try{
-    var r=await fetch(API+"/document/"+d.id+"/edicao",{method:"DELETE"});
+    var r=await apiFetch(API+"/document/"+d.id+"/edicao",{method:"DELETE"});
     if(!r.ok) throw new Error("HTTP "+r.status);
     delete DOCS[d.slug];                 // força recarregar do servidor
     marcarEstado("");
@@ -1019,7 +1064,7 @@ window.addEventListener("beforeunload", function(e){
    (POST /api/worker/heartbeat) e o que esta' na fila esperando. */
 var _tGpu=null;
 function irExtracaoGPU(){
-  el("view-home").style.display="none"; el("view-extract").style.display="none";
+  el("view-home").style.display="none"; el("view-extract").style.display="none"; el("view-equipe").style.display="none";
   el("view-gpu").style.display="block";
   el("topbar-tit").textContent="Extração"; setNav("gpu");
   atualizarGPU();
@@ -1034,8 +1079,8 @@ function _card(tit, corpo, cor){
 async function atualizarGPU(){
   if(el("view-gpu").style.display==="none"){ clearInterval(_tGpu); return; }
   var w={conectado:false}, fila=[];
-  try{ w=await (await fetch(API+"/worker")).json(); }catch(e){ w={conectado:false,motivo:e.message}; }
-  try{ fila=await (await fetch(API+"/fila")).json(); }catch(e){ fila=[]; }
+  try{ w=await (await apiFetch(API+"/worker")).json(); }catch(e){ w={conectado:false,motivo:e.message}; }
+  try{ fila=await (await apiFetch(API+"/fila")).json(); }catch(e){ fila=[]; }
   var est=w.estado||{};
   el("gpu-badge-estado").textContent = w.conectado ? (est.rodando?"Extraindo":"Ocioso") : "Offline";
   el("gpu-badge-fila").textContent   = fila.length;
@@ -1062,7 +1107,7 @@ async function atualizarGPU(){
 async function mostrarUltimaSync(){
   var el_=el("sync-quando"); if(!el_) return;
   try{
-    var r=await fetch(API+"/curadoria/ultima");
+    var r=await apiFetch(API+"/curadoria/ultima");
     if(!r.ok){ el_.textContent=""; return; }
     var j=await r.json();
     if(j.nunca){ el_.textContent="nunca sincronizado — clique em Buscar novos"; return; }
@@ -1076,7 +1121,7 @@ async function sincronizarCuradoria(){
   var b=el("btn-sync"); if(b.disabled) return;
   b.disabled=true; var antes=b.textContent; b.textContent="Consultando…";
   try{
-    var r=await fetch(API+"/curadoria/sincronizar",{method:"POST"});
+    var r=await apiFetch(API+"/curadoria/sincronizar",{method:"POST"});
     var j=await r.json();
     if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
     var lista = (j.novos_exemplos||[]).map(function(n){
@@ -1098,11 +1143,73 @@ async function sincronizarCuradoria(){
       '<div style="margin-top:10px;font-size:12px;color:var(--cinza)">A API de curadoria pode estar fora do ar. Os documentos já no banco continuam disponíveis.</div>');
   }finally{ b.disabled=false; b.textContent=antes; }
 }
+
+/* ── Equipe ──
+   Cadastro INTERNO: o endpoint exige token, entao so' quem ja' esta' dentro cria
+   conta nova. A tela de login nao tem "criar conta" de proposito. */
+async function irEquipe(){
+  el("view-home").style.display="none"; el("view-extract").style.display="none";
+  el("view-gpu").style.display="none"; el("view-equipe").style.display="block";
+  el("topbar-tit").textContent="Equipe"; setNav("equipe");
+  formIntegrante(false); await carregarEquipe();
+}
+function formIntegrante(mostrar){
+  el("eq-form").style.display = mostrar ? "block" : "none";
+  if(mostrar){ el("eq-erro").textContent=""; el("eq-nome").focus(); }
+}
+async function carregarEquipe(){
+  var lista=el("eq-lista");
+  lista.innerHTML='<div class="md-vazio">Carregando...</div>';
+  try{
+    var r=await apiFetch(API+"/equipe");
+    if(!r.ok){ var e1=await r.json(); throw new Error(e1.detail||("HTTP "+r.status)); }
+    var eq=await r.json();
+    el("eq-total").textContent=eq.length;
+    el("eq-admins").textContent=eq.filter(function(p){return p.role==="admin";}).length;
+    var cor={admin:["#166534","#dcfce7"],curador:["#1e40af","#dbeafe"],leitor:["#6b7280","#f3f4f6"]};
+    lista.innerHTML = eq.length ? eq.map(function(p){
+      var c=cor[p.role]||cor.leitor;
+      var ini=(p.name||"?").slice(0,2).toUpperCase();
+      return '<div class="linha"><div style="display:flex;align-items:center;gap:12px;padding:14px 16px;flex:1">'+
+        '<div style="width:34px;height:34px;border-radius:50%;background:'+c[1]+';color:'+c[0]+
+        ';display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px">'+esc(ini)+'</div>'+
+        '<div><div class="linha-tit">'+esc(p.name||"-")+'</div>'+
+        '<div class="linha-meta">'+esc(String(p.id||"").slice(0,8))+'...</div></div></div>'+
+        '<div style="padding-right:16px"><span class="mini-chip" style="background:'+c[1]+';color:'+c[0]+'">'+
+        esc(p.role||"leitor")+'</span></div></div>';
+    }).join("") : '<div class="md-vazio">Ninguem cadastrado.</div>';
+  }catch(e){
+    lista.innerHTML='<div class="md-vazio">Nao deu para listar: '+esc(String(e.message||e))+'</div>';
+  }
+}
+async function cadastrarIntegrante(){
+  var b=el("eq-salvar"), erro=el("eq-erro");
+  var corpo={ nome:el("eq-nome").value.trim(), email:el("eq-email").value.trim(),
+              senha:el("eq-senha").value, cargo:el("eq-cargo").value };
+  if(!corpo.email || !corpo.senha){ erro.textContent="E-mail e senha sao obrigatorios."; return; }
+  if(corpo.senha.length<8){ erro.textContent="A senha precisa de pelo menos 8 caracteres."; return; }
+  b.disabled=true; b.textContent="Cadastrando..."; erro.textContent="";
+  try{
+    var r=await apiFetch(API+"/equipe",{method:"POST",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify(corpo)});
+    var j=await r.json();
+    if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    el("eq-nome").value=""; el("eq-email").value=""; el("eq-senha").value="";
+    formIntegrante(false); await carregarEquipe();
+    abrirPainel("Integrante cadastrado",
+      '<div style="font-size:13px;line-height:1.8"><b>'+esc(j.nome)+'</b> ('+esc(j.cargo)+')<br>'+
+      esc(j.email)+'</div>'+
+      '<div style="margin-top:12px;padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;font-size:12px;color:#7c2d12">'+
+      'Passe a senha provisoria por um canal seguro e peca para troca-la. '+
+      'Ela foi definida por voce e nao e enviada por e-mail.</div>');
+  }catch(e){ erro.textContent=String(e.message||e); }
+  finally{ b.disabled=false; b.textContent="Cadastrar"; }
+}
 /* ── Histórico e Configs ────────────────────────────────────────────────────
    O histórico é o log do servidor: entrada/saída, alteração de documento e o
    que entrou no acervo. O "ator" é o que a pessoa digitou no login — enquanto
    a autenticação for protótipo, ele não prova identidade. */
-var USUARIO = null, TOTAL_CURADORIA = 0;
+var USUARIO = null, CARGO = null, TOTAL_CURADORIA = 0;
 var EV_ROTULO = {
   login:              ["entrou",                "#166534", "#dcfce7"],
   logout:             ["saiu",                  "#7c2d12", "#ffedd5"],
@@ -1113,7 +1220,7 @@ var EV_ROTULO = {
 };
 async function anotar(evento, alvo, detalhe){
   try{
-    await fetch(API+"/log", {method:"POST", headers:{"Content-Type":"application/json"},
+    await apiFetch(API+"/log", {method:"POST", headers:{"Content-Type":"application/json"},
       body:JSON.stringify({evento:evento, ator:USUARIO, alvo:alvo||null, detalhe:detalhe||null})});
   }catch(e){ /* auditoria nunca atrapalha o uso */ }
 }
@@ -1136,7 +1243,7 @@ function _nomeDoc(alvo){
 async function abrirHistorico(){
   abrirPainel("Histórico", '<div class="md-vazio">Carregando…</div>');
   try{
-    var r=await fetch(API+"/log?limite=300");
+    var r=await apiFetch(API+"/log?limite=300");
     if(!r.ok){
       var t=await r.text();
       abrirPainel("Histórico", '<div class="md-vazio">Não foi possível ler o histórico.<br><small>'+esc(t.slice(0,300))+'</small></div>');
@@ -1165,7 +1272,7 @@ async function abrirHistorico(){
 }
 async function abrirConfigs(){
   var saude={};
-  try{ saude=await (await fetch(API+"/health")).json(); }catch(e){ saude={status:"sem resposta"}; }
+  try{ saude=await (await apiFetch(API+"/health")).json(); }catch(e){ saude={status:"sem resposta"}; }
   var docs=IDX.length, pgs=IDX.reduce(function(a,d){return a+(d.n_paginas||0);},0);
   function linha(k,v){ return '<div class="cfg-l"><span>'+k+'</span><b>'+esc(String(v))+'</b></div>'; }
   abrirPainel("Configurações",
@@ -1543,19 +1650,52 @@ function vetorizar(){
 /* init */
 montarFiltros(); montarSituacoes();
 /* ── login (protótipo de front; validação real = backend) ── */
-function entrar(e){
+/* ── sessao ──
+   O login era protótipo: aceitava qualquer coisa e não protegia nada. Agora vai
+   ao Supabase Auth pelo backend. Não existe auto-registro: quem entra e' quem
+   ja' foi cadastrado por alguem de dentro (aba Equipe). */
+var TOKEN = null;
+function apiFetch(url, opts){
+  opts = opts || {};
+  var h = Object.assign({}, opts.headers || {});
+  if(TOKEN) h["Authorization"] = "Bearer " + TOKEN;
+  opts.headers = h;
+  return fetch(url, opts).then(function(r){
+    if(r.status===401 && TOKEN){ sair(true); }   // sessao expirou
+    return r;
+  });
+}
+async function entrar(e){
   if(e) e.preventDefault();
-  var u=(el("login-user").value||"").trim(), p=(el("login-pass").value||"").trim();
-  var erro=el("login-erro");
-  if(!u || !p){ erro.textContent="Preencha usuário e senha."; return; }
-  erro.textContent="";
-  USUARIO=u;
-  anotar("login");
-  el("view-login").style.display="none";
-  var av=document.querySelector(".sb-user .av"), nome=document.querySelector(".sb-user > div:last-child");
-  if(av) av.textContent=(u.slice(0,2)||"US").toUpperCase();
-  if(nome) nome.innerHTML=esc(u)+"<br><small>sessão iniciada</small>";
-  iniciar();
+  var email=(el("login-user").value||"").trim(), senha=(el("login-pass").value||"");
+  var erro=el("login-erro"), btn=document.querySelector(".login-btn");
+  if(!email || !senha){ erro.textContent="Preencha e-mail e senha."; return; }
+  erro.textContent=""; if(btn){ btn.disabled=true; btn.textContent="Entrando…"; }
+  try{
+    var r=await fetch(API+"/auth/login",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({email:email, senha:senha})});
+    var j=await r.json();
+    if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    TOKEN=j.token; USUARIO=j.usuario.nome; CARGO=j.usuario.cargo||"leitor";
+    try{ sessionStorage.setItem("sb100_tok", TOKEN); }catch(_){}
+    el("view-login").style.display="none";
+    var av=document.querySelector(".sb-user .av"), nome=document.querySelector(".sb-user > div:last-child");
+    if(av) av.textContent=(USUARIO.slice(0,2)||"US").toUpperCase();
+    if(nome) nome.innerHTML=esc(USUARIO)+"<br><small>"+esc(CARGO)+" · <a href='#' onclick='sair();return false' style='color:inherit'>sair</a></small>";
+    iniciar();
+  }catch(err){
+    erro.textContent = String(err.message||err);
+  }finally{ if(btn){ btn.disabled=false; btn.textContent="Entrar"; } }
+}
+async function sair(expirou){
+  if(!expirou) try{ await apiFetch(API+"/log",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({evento:"logout",ator:USUARIO})}); }catch(_){}
+  TOKEN=null; USUARIO=null; CARGO=null;
+  try{ sessionStorage.removeItem("sb100_tok"); }catch(_){}
+  el("view-login").style.display="flex";
+  el("login-erro").textContent = expirou ? "Sua sessão expirou. Entre de novo." : "";
+  el("login-pass").value="";
 }
 
 async function iniciar(){
