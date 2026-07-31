@@ -48,10 +48,19 @@
   .hero-resumo{display:none;gap:18px;flex-wrap:wrap;font-size:13px;opacity:.95;margin-top:9px;}
   .home-hero.recolhido .hero-resumo{display:flex;}
   .hero-resumo b{font-size:15px;}
-  .busca-wrap{display:flex;align-items:center;gap:7px;border:1px solid var(--borda);border-radius:20px;
-    padding:5px 12px;background:#fff;color:var(--cinza);width:100%;max-width:340px;}
-  .busca-wrap input{border:none;outline:none;font-size:12.5px;font-family:inherit;flex:1;min-width:0;background:transparent;}
-  .busca-wrap:focus-within{outline:2px solid var(--verde);outline-offset:1px;}
+  .busca-faixa{display:flex;align-items:center;gap:14px;margin:16px 0 2px;}
+  .busca-wrap{display:flex;align-items:center;gap:10px;border:1.5px solid var(--borda);border-radius:11px;
+    padding:11px 15px;background:#fff;color:var(--cinza);flex:1;max-width:620px;
+    box-shadow:0 1px 3px rgba(0,0,0,.05);transition:border-color .15s,box-shadow .15s;}
+  .busca-wrap:hover{border-color:#c9c9c9;}
+  .busca-wrap input{border:none;outline:none;font-size:14px;font-family:inherit;flex:1;min-width:0;
+    background:transparent;color:#1a1a1a;}
+  .busca-wrap input::placeholder{color:#9b9b9b;}
+  .busca-wrap:focus-within{border-color:var(--verde);box-shadow:0 0 0 3px var(--verde-claro);}
+  .busca-wrap:focus-within svg{color:var(--verde);}
+  #busca-x{border:none;background:transparent;color:var(--cinza);cursor:pointer;font-size:13px;padding:0 2px;display:none;}
+  #busca-x:hover{color:#1a1a1a;}
+  #busca-info{font-size:12.5px;color:var(--cinza);white-space:nowrap;}
   .paginacao{display:flex;align-items:center;justify-content:center;gap:14px;padding:6px 0 26px;font-size:12.5px;color:var(--cinza);}
   .btn-mais{padding:9px 22px;border:1px solid var(--borda);border-radius:22px;background:#fff;
     font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
@@ -174,26 +183,6 @@
   .cfg-l{display:flex;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid #f1f1f1;font-size:13px;}
   .cfg-l span:first-child{color:var(--cinza);}
   .mini-chip.fila{background:#fef3c7;color:#92400e;}
-  .hero-topo{display:flex;align-items:center;justify-content:space-between;gap:12px;}
-  .home-hero{cursor:pointer;transition:padding .18s ease;}
-  .home-hero.recolhido{padding-top:14px;padding-bottom:14px;}
-  .home-hero.recolhido #hero-desc,.home-hero.recolhido #hero-badges{display:none;}
-  .home-hero.recolhido #hero-seta{transform:rotate(-90deg);}
-  .home-hero.recolhido h2{font-size:16px;margin:0;}
-  .hero-resumo{display:none;gap:18px;flex-wrap:wrap;font-size:13px;opacity:.95;margin-top:9px;}
-  .home-hero.recolhido .hero-resumo{display:flex;}
-  .hero-resumo b{font-size:15px;}
-  .busca-wrap{display:flex;align-items:center;gap:7px;border:1px solid var(--borda);border-radius:20px;
-    padding:5px 12px;background:#fff;color:var(--cinza);width:100%;max-width:340px;}
-  .busca-wrap input{border:none;outline:none;font-size:12.5px;font-family:inherit;flex:1;min-width:0;background:transparent;}
-  .busca-wrap:focus-within{outline:2px solid var(--verde);outline-offset:1px;}
-  .paginacao{display:flex;align-items:center;justify-content:center;gap:14px;padding:6px 0 26px;font-size:12.5px;color:var(--cinza);}
-  .btn-mais{padding:9px 22px;border:1px solid var(--borda);border-radius:22px;background:#fff;
-    font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
-  .btn-mais:hover{background:var(--cinza-bg);}
-  .rodape{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
-    padding:18px 2px 30px;border-top:1px solid var(--borda);font-size:12px;color:var(--cinza);}
-  .rodape-marca b{color:var(--verde);font-size:13px;letter-spacing:.4px;}
   .sb-user{cursor:pointer;transition:background .12s;}
   .sb-user:hover{background:var(--cinza-bg);}
   .menu-conta{position:absolute;bottom:74px;left:12px;right:12px;z-index:500;background:#fff;border:1px solid var(--borda);
@@ -445,6 +434,15 @@
       </div>
       <div id="hero-resumo" class="hero-resumo"></div>
     </div>
+    <div class="busca-faixa">
+      <div class="busca-wrap">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"
+             stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+        <input id="busca" type="search" placeholder="Buscar por título, autor, periódico, DOI ou nome do arquivo…"
+               oninput="buscar(this.value)" autocomplete="off">
+        <button id="busca-x" onclick="limparBusca()" title="Limpar">&#10005;</button>
+      </div>
+      <span id="busca-info"></span>
     </div>
     <div class="lista-topo">
       <div class="filtros" id="filtros"><span class="filtro-lbl">Categoria:</span></div>
@@ -452,14 +450,6 @@
       <div class="filtros">
         <button id="btn-sync" onclick="sincronizarCuradoria()" class="filtro" title="Consulta a API da Squad 1 e vê se há documentos novos">Buscar novos</button>
         <span id="sync-quando" style="font-size:11.5px;color:var(--cinza)"></span>
-      </div>
-      <div class="filtros" style="flex:1;min-width:210px">
-        <div class="busca-wrap">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-               stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
-          <input id="busca" type="search" placeholder="Buscar por título, autor, arquivo ou DOI"
-                 oninput="buscar(this.value)" autocomplete="off">
-        </div>
       </div>
       <div class="filtros"><span class="filtro-lbl">Por página:</span>
         <select id="por-pagina" onchange="mudarPorPagina(this.value)" class="sel-ordem">
@@ -1323,7 +1313,13 @@ function resumoHero(){
     '<span><b>'+extraidos.size+'</b> extraídos</span>'+
     '<span><b>'+vetorizados.size+'</b> vetorizados</span>';
 }
-function buscar(v){ BUSCA=(v||"").trim().toLowerCase(); MOSTRANDO=POR_PAGINA||1e9; renderHome(); }
+function buscar(v){
+  BUSCA=(v||"").trim().toLowerCase();
+  MOSTRANDO=POR_PAGINA||1e9;
+  var x=el("busca-x"); if(x) x.style.display = BUSCA ? "block" : "none";
+  renderHome();
+}
+function limparBusca(){ var b=el("busca"); if(b){ b.value=""; b.focus(); } buscar(""); }
 function mudarPorPagina(v){
   POR_PAGINA = parseInt(v,10)||0;          // 0 = todos
   MOSTRANDO = POR_PAGINA || 1e9;
@@ -1342,8 +1338,9 @@ function renderPaginacao(total){
   var el_=el("paginacao"); if(!el_) return;
   var vendo=Math.min(MOSTRANDO,total);
   if(!total){ el_.innerHTML=""; return; }
-  el_.innerHTML = '<span><b>'+vendo+'</b> de <b>'+total+'</b> documento'+(total===1?'':'s')+
-    (BUSCA?' para "'+esc(BUSCA)+'"':'')+'</span>'+
+  var info=el("busca-info");
+  if(info) info.textContent = BUSCA ? (total+" resultado"+(total===1?"":"s")) : "";
+  el_.innerHTML = '<span><b>'+vendo+'</b> de <b>'+total+'</b> documento'+(total===1?'':'s')+'</span>'+
     (vendo<total ? '<button class="btn-mais" onclick="carregarMais()">Carregar mais</button>' : '');
 }
 /* ── conta ──
