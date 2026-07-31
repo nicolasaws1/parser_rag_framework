@@ -39,6 +39,26 @@
   .sb-plan .barra{height:6px;background:#eee;border-radius:4px;overflow:hidden;margin-top:8px;}
   .sb-plan .barra span{display:block;height:100%;width:0;background:var(--verde);}
   .sb-plan small{font-size:11px;color:var(--cinza);}
+  .hero-topo{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  .home-hero{cursor:pointer;transition:padding .18s ease;}
+  .home-hero.recolhido{padding-top:14px;padding-bottom:14px;}
+  .home-hero.recolhido #hero-desc,.home-hero.recolhido #hero-badges{display:none;}
+  .home-hero.recolhido #hero-seta{transform:rotate(-90deg);}
+  .home-hero.recolhido h2{font-size:16px;margin:0;}
+  .hero-resumo{display:none;gap:18px;flex-wrap:wrap;font-size:13px;opacity:.95;margin-top:9px;}
+  .home-hero.recolhido .hero-resumo{display:flex;}
+  .hero-resumo b{font-size:15px;}
+  .busca-wrap{display:flex;align-items:center;gap:7px;border:1px solid var(--borda);border-radius:20px;
+    padding:5px 12px;background:#fff;color:var(--cinza);width:100%;max-width:340px;}
+  .busca-wrap input{border:none;outline:none;font-size:12.5px;font-family:inherit;flex:1;min-width:0;background:transparent;}
+  .busca-wrap:focus-within{outline:2px solid var(--verde);outline-offset:1px;}
+  .paginacao{display:flex;align-items:center;justify-content:center;gap:14px;padding:6px 0 26px;font-size:12.5px;color:var(--cinza);}
+  .btn-mais{padding:9px 22px;border:1px solid var(--borda);border-radius:22px;background:#fff;
+    font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
+  .btn-mais:hover{background:var(--cinza-bg);}
+  .rodape{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    padding:18px 2px 30px;border-top:1px solid var(--borda);font-size:12px;color:var(--cinza);}
+  .rodape-marca b{color:var(--verde);font-size:13px;letter-spacing:.4px;}
   .sb-user{padding:14px 18px;border-top:1px solid var(--borda);display:flex;align-items:center;gap:10px;}
   .sb-user .av{width:30px;height:30px;border-radius:50%;background:var(--laranja);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;}
   .sb-user div{font-size:12px;line-height:1.3;}
@@ -154,6 +174,26 @@
   .cfg-l{display:flex;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid #f1f1f1;font-size:13px;}
   .cfg-l span:first-child{color:var(--cinza);}
   .mini-chip.fila{background:#fef3c7;color:#92400e;}
+  .hero-topo{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  .home-hero{cursor:pointer;transition:padding .18s ease;}
+  .home-hero.recolhido{padding-top:14px;padding-bottom:14px;}
+  .home-hero.recolhido #hero-desc,.home-hero.recolhido #hero-badges{display:none;}
+  .home-hero.recolhido #hero-seta{transform:rotate(-90deg);}
+  .home-hero.recolhido h2{font-size:16px;margin:0;}
+  .hero-resumo{display:none;gap:18px;flex-wrap:wrap;font-size:13px;opacity:.95;margin-top:9px;}
+  .home-hero.recolhido .hero-resumo{display:flex;}
+  .hero-resumo b{font-size:15px;}
+  .busca-wrap{display:flex;align-items:center;gap:7px;border:1px solid var(--borda);border-radius:20px;
+    padding:5px 12px;background:#fff;color:var(--cinza);width:100%;max-width:340px;}
+  .busca-wrap input{border:none;outline:none;font-size:12.5px;font-family:inherit;flex:1;min-width:0;background:transparent;}
+  .busca-wrap:focus-within{outline:2px solid var(--verde);outline-offset:1px;}
+  .paginacao{display:flex;align-items:center;justify-content:center;gap:14px;padding:6px 0 26px;font-size:12.5px;color:var(--cinza);}
+  .btn-mais{padding:9px 22px;border:1px solid var(--borda);border-radius:22px;background:#fff;
+    font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
+  .btn-mais:hover{background:var(--cinza-bg);}
+  .rodape{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    padding:18px 2px 30px;border-top:1px solid var(--borda);font-size:12px;color:var(--cinza);}
+  .rodape-marca b{color:var(--verde);font-size:13px;letter-spacing:.4px;}
   .sb-user{cursor:pointer;transition:background .12s;}
   .sb-user:hover{background:var(--cinza-bg);}
   .menu-conta{position:absolute;bottom:74px;left:12px;right:12px;z-index:500;background:#fff;border:1px solid var(--borda);
@@ -388,15 +428,23 @@
 
   <!-- HOME -->
   <div class="home" id="view-home">
-    <div class="home-hero">
-      <h2>PDFs aprovados para extração</h2>
-      <p>Artigos aprovados pelo curador na Squad 1, recebidos pela API. Só os metadados chegam aqui — o parser (DocLayout-YOLO + Chandra OCR) é quem descobre páginas, tabelas, figuras e fórmulas.</p>
-      <div class="home-badges">
+    <div class="home-hero" id="hero-home" onclick="alternarHero()" title="Clique para expandir">
+      <div class="hero-topo">
+        <h2>PDFs aprovados para extração</h2>
+        <svg id="hero-seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="opacity:.75">
+          <polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <p id="hero-desc">Artigos aprovados pelo curador na Squad 1, recebidos pela API. Só os metadados chegam aqui
+         — o parser (DocLayout-YOLO + Chandra OCR) é quem descobre páginas, tabelas, figuras e fórmulas.</p>
+      <div class="home-badges" id="hero-badges">
         <div class="home-badge"><div class="n" id="badge-curad">—</div><div class="l">Aprovados na curadoria</div></div>
         <div class="home-badge"><div class="n" id="badge-total">0</div><div class="l">Baixados aqui</div></div>
         <div class="home-badge"><div class="n" id="badge-ext">0</div><div class="l">Extraídos (parser)</div></div>
         <div class="home-badge"><div class="n" id="badge-vet">0</div><div class="l">Vetorizados (Qdrant)</div></div>
       </div>
+      <div id="hero-resumo" class="hero-resumo"></div>
+    </div>
     </div>
     <div class="lista-topo">
       <div class="filtros" id="filtros"><span class="filtro-lbl">Categoria:</span></div>
@@ -404,6 +452,21 @@
       <div class="filtros">
         <button id="btn-sync" onclick="sincronizarCuradoria()" class="filtro" title="Consulta a API da Squad 1 e vê se há documentos novos">Buscar novos</button>
         <span id="sync-quando" style="font-size:11.5px;color:var(--cinza)"></span>
+      </div>
+      <div class="filtros" style="flex:1;min-width:210px">
+        <div class="busca-wrap">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+               stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+          <input id="busca" type="search" placeholder="Buscar por título, autor, arquivo ou DOI"
+                 oninput="buscar(this.value)" autocomplete="off">
+        </div>
+      </div>
+      <div class="filtros"><span class="filtro-lbl">Por página:</span>
+        <select id="por-pagina" onchange="mudarPorPagina(this.value)" class="sel-ordem">
+          <option value="10">10</option><option value="20" selected>20</option>
+          <option value="50">50</option><option value="100">100</option>
+          <option value="0">Todos</option>
+        </select>
       </div>
       <div class="filtros"><span class="filtro-lbl">Ordenar:</span>
         <select id="ordem" onchange="mudarOrdem(this.value)" class="sel-ordem">
@@ -430,6 +493,11 @@
       <span class="lh-acao"></span>
     </div>
     <div class="lista" id="lista"></div>
+    <div id="paginacao" class="paginacao"></div>
+    <footer class="rodape">
+      <div class="rodape-marca"><b>SB100</b> — Squad 2</div>
+      <div>Vetorização e extração</div>
+    </footer>
   </div>
 
   <!-- EXTRACT -->
@@ -686,6 +754,7 @@ function docsVisiveis(){
     if(filtroSit==="extraidos"   && !extraidos.has(i))  return false;
     if(filtroSit==="nao"         &&  extraidos.has(i))  return false;
     if(filtroSit==="vetorizados" && !vetorizados.has(i)) return false;
+    if(!casaBusca(d)) return false;
     return true;
   });
   var t=function(i){ return (IDX[i].meta.titulo||IDX[i].arquivo||"").toLowerCase(); };
@@ -729,8 +798,12 @@ function renderHome(){
   const lista = el("lista"); lista.innerHTML="";
   lista.className = "lista" + (viewMode==="grade" ? " grade" : "");
   el("view-home").classList.toggle("grade-mode", viewMode==="grade");
-  const visiveis=docsVisiveis();
-  if(!visiveis.length) lista.innerHTML='<div class="md-vazio">Nenhum documento com esses filtros.</div>';
+  const todos=docsVisiveis();
+  const visiveis=todos.slice(0, MOSTRANDO);
+  if(!todos.length) lista.innerHTML='<div class="md-vazio">'+
+    (BUSCA ? 'Nada encontrado para "'+esc(BUSCA)+'".' : 'Nenhum documento com esses filtros.')+'</div>';
+  renderPaginacao(todos.length);
+  resumoHero();
   visiveis.forEach((i)=>{
     const d=IDX[i];
     const ext=extraidos.has(i), vet=vetorizados.has(i), sel=selecionados.has(i), m=d.meta, r=d.resumo;
@@ -1225,6 +1298,54 @@ async function removerIntegrante(uid, nome){
   }
 }
 
+
+/* ── cabecalho recolhivel, busca e paginacao ──
+   O cabecalho ocupava um terco da tela sem que a informacao mudasse a cada
+   visita. Recolhido, mostra os numeros numa linha; clicando, abre o resto.
+   A escolha fica guardada na sessao. */
+var HERO_ABERTO = false, BUSCA = "", POR_PAGINA = 20, MOSTRANDO = 20;
+function alternarHero(){
+  HERO_ABERTO = !HERO_ABERTO;
+  aplicarHero();
+  try{ sessionStorage.setItem("sb100_hero", HERO_ABERTO ? "1" : "0"); }catch(_){}
+}
+function aplicarHero(){
+  var h=el("hero-home"); if(!h) return;
+  h.classList.toggle("recolhido", !HERO_ABERTO);
+  h.title = HERO_ABERTO ? "Clique para recolher" : "Clique para expandir";
+}
+function resumoHero(){
+  var r=el("hero-resumo"); if(!r) return;
+  var noBanco=IDX.length;
+  r.innerHTML =
+    (TOTAL_CURADORIA ? '<span><b>'+noBanco+'</b> de '+TOTAL_CURADORIA+' baixados</span>' :
+                       '<span><b>'+noBanco+'</b> documentos</span>')+
+    '<span><b>'+extraidos.size+'</b> extraídos</span>'+
+    '<span><b>'+vetorizados.size+'</b> vetorizados</span>';
+}
+function buscar(v){ BUSCA=(v||"").trim().toLowerCase(); MOSTRANDO=POR_PAGINA||1e9; renderHome(); }
+function mudarPorPagina(v){
+  POR_PAGINA = parseInt(v,10)||0;          // 0 = todos
+  MOSTRANDO = POR_PAGINA || 1e9;
+  try{ sessionStorage.setItem("sb100_pp", String(POR_PAGINA)); }catch(_){}
+  renderHome();
+}
+function carregarMais(){ MOSTRANDO += (POR_PAGINA||20); renderHome();
+  window.scrollBy({top:200, behavior:"smooth"}); }
+function casaBusca(d){
+  if(!BUSCA) return true;
+  var m=d.meta||{};
+  return [m.titulo, m.autores, m.periodico, m.ano, m.doi, d.arquivo]
+    .filter(Boolean).join(" ").toLowerCase().indexOf(BUSCA) >= 0;
+}
+function renderPaginacao(total){
+  var el_=el("paginacao"); if(!el_) return;
+  var vendo=Math.min(MOSTRANDO,total);
+  if(!total){ el_.innerHTML=""; return; }
+  el_.innerHTML = '<span><b>'+vendo+'</b> de <b>'+total+'</b> documento'+(total===1?'':'s')+
+    (BUSCA?' para "'+esc(BUSCA)+'"':'')+'</span>'+
+    (vendo<total ? '<button class="btn-mais" onclick="carregarMais()">Carregar mais</button>' : '');
+}
 /* ── conta ──
    Menu no avatar, como em qualquer serviço: minha conta, historico e sair.
    Trocar e-mail ou senha pede a senha ATUAL — sem isso, um computador deixado
@@ -1826,6 +1947,13 @@ function vetorizar(){
 
 /* init */
 montarFiltros(); montarSituacoes();
+try{
+  HERO_ABERTO = sessionStorage.getItem("sb100_hero") === "1";
+  var _pp = sessionStorage.getItem("sb100_pp");
+  if(_pp !== null){ POR_PAGINA = parseInt(_pp,10)||0; MOSTRANDO = POR_PAGINA || 1e9;
+    var _s = el("por-pagina"); if(_s) _s.value = String(POR_PAGINA); }
+}catch(_){}
+aplicarHero();
 /* ── login (protótipo de front; validação real = backend) ── */
 /* ── sessao ──
    O login era protótipo: aceitava qualquer coisa e não protegia nada. Agora vai
