@@ -48,6 +48,12 @@
   .hero-resumo{display:none;gap:18px;flex-wrap:wrap;font-size:13px;opacity:.95;margin-top:9px;}
   .home-hero.recolhido .hero-resumo{display:flex;}
   .hero-resumo b{font-size:15px;}
+  .lista-topo .acoes{flex-basis:100%;justify-content:flex-start;gap:12px;}
+  #sel-info{min-width:132px;display:inline-block;}
+  .btn-vet-lista{padding:8px 16px;border:none;border-radius:9px;background:var(--verde);
+    color:#fff;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;
+    display:inline-flex;align-items:center;gap:7px;}
+  .btn-vet-lista:disabled{background:#e3e3e3;color:#9b9b9b;cursor:default;}
   .busca-faixa{display:flex;align-items:center;gap:14px;margin:0 0 26px;}
   .busca-wrap{display:flex;align-items:center;gap:10px;border:1.5px solid var(--borda);border-radius:11px;
     padding:11px 15px;background:#fff;color:var(--cinza);flex:1;max-width:620px;
@@ -452,6 +458,7 @@
           <option value="extraidos">Extraídos</option>
           <option value="nao">Não extraídos</option>
           <option value="vetorizados">Vetorizados</option>
+          <option value="nao_vet">Não vetorizados</option>
         </select>
       </div>
       <div class="filtros">
@@ -481,6 +488,11 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13l2 2 4-4"/></svg>
           Analisar (Parser)
         </button>
+        <button class="btn-vet-lista" id="btn-vet-lista" onclick="vetorizarSelecionados()" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+               stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/>
+          <path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+          Vetorizar (Qdrant)</button>
       </div>
     </div>
     <div class="lista-head">
@@ -741,6 +753,7 @@ function docsVisiveis(){
     if(filtroSit==="extraidos"   && !extraidos.has(i))  return false;
     if(filtroSit==="nao"         &&  extraidos.has(i))  return false;
     if(filtroSit==="vetorizados" && !vetorizados.has(i)) return false;
+    if(filtroSit==="nao_vet"      &&  vetorizados.has(i)) return false;
     if(!casaBusca(d)) return false;
     return true;
   });
@@ -846,7 +859,8 @@ function toggleSel(i,elc){ if(elc.checked) selecionados.add(i); else selecionado
 function selecionarTodos(elc){ docsVisiveis().forEach(function(i){ if(elc.checked) selecionados.add(i); else selecionados.delete(i); }); renderHome(); }
 function atualizarSelInfo(){ const n=selecionados.size;
   el("sel-info").textContent = n===0?"Nenhum selecionado":(n===1?"1 selecionado":n+" selecionados");
-  el("btn-parser").disabled = (n===0||parserRodando); }
+  el("btn-parser").disabled = (n===0||parserRodando);
+  var bv=el("btn-vet-lista"); if(bv) bv.disabled = (n===0||parserRodando); }
 
 
 /* Documento aprovado mas ainda sem extracao: nao ha' pagina nem bloco para
@@ -895,6 +909,55 @@ async function pedirExtracao(i){
     abrirPainel("Não deu para solicitar", '<p style="font-size:13px">'+esc(e.message)+'</p>');
   }
 }
+
+/* Avisa em vez de refazer em silencio: pedir extracao do que ja' foi extraido,
+   ou vetorizacao do que ja' esta' no Qdrant, e' quase sempre engano. */
+function separar(){
+  // Array.from, nao [].slice.call: `selecionados` e' um Set e slice sobre Set
+  // devolve array VAZIO (Set nao tem length) — os avisos nunca disparavam
+  var sel=Array.from(selecionados);
+  return {
+    extraidos:   sel.filter(function(i){ return  extraidos.has(i); }),
+    naoExtraidos:sel.filter(function(i){ return !extraidos.has(i); }),
+    vetorizados: sel.filter(function(i){ return  vetorizados.has(i); }),
+    naoVet:      sel.filter(function(i){ return !vetorizados.has(i); })
+  };
+}
+function listaNomes(idx, limite){
+  limite = limite||6;
+  var n = idx.slice(0,limite).map(function(i){
+    return '<li style="margin:2px 0">'+esc(((IDX[i].meta&&IDX[i].meta.titulo)||IDX[i].arquivo||"").slice(0,72))+'</li>';
+  }).join("");
+  if(idx.length>limite) n += '<li style="color:var(--cinza)">… e mais '+(idx.length-limite)+'</li>';
+  return '<ul style="margin:6px 0 0 18px;padding:0;font-size:12.5px">'+n+'</ul>';
+}
+async function vetorizarSelecionados(){
+  if(!selecionados.size) return;
+  var g=separar();
+  if(g.naoExtraidos.length){
+    abrirPainel("Ainda não extraídos",
+      '<p style="font-size:13px;line-height:1.7">'+g.naoExtraidos.length+' dos selecionados ainda não passaram '+
+      'pelo parser. Não há texto para vetorizar.</p>'+listaNomes(g.naoExtraidos)+
+      '<div style="margin-top:12px;font-size:12px;color:var(--cinza)">Extraia primeiro e depois vetorize.</div>');
+    return;
+  }
+  if(g.vetorizados.length){
+    var so = g.naoVet.length;
+    abrirPainel("Já vetorizados",
+      '<p style="font-size:13px;line-height:1.7"><b>'+g.vetorizados.length+'</b> dos selecionados já estão no Qdrant. '+
+      'Vetorizar de novo criaria pontos duplicados no índice.</p>'+listaNomes(g.vetorizados)+
+      (so ? '<div style="margin-top:14px;font-size:13px">Os outros <b>'+so+'</b> ainda não foram vetorizados.</div>' : '')+
+      '<div style="margin-top:12px;font-size:12px;color:var(--cinza)">Use o filtro <b>Não vetorizados</b> para separar.</div>');
+    if(!so) return;
+  }
+  abrirPainel("Vetorização",
+    '<p style="font-size:13px;line-height:1.7">'+g.naoVet.length+' documento(s) prontos para vetorizar.</p>'+
+    listaNomes(g.naoVet)+
+    '<div style="margin-top:14px;padding:11px 13px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;'+
+    'font-size:12.5px;color:#7c2d12;line-height:1.6"><b>O vetorizador ainda não está ligado.</b> '+
+    'A segmentação e o envio ao Qdrant (collection <code>sb100</code>) rodam do lado com GPU e ainda não foram '+
+    'escritos. Este botão hoje só valida a seleção — nenhum ponto é enviado.</div>');
+}
 /* ── PARSER ──
    Este servidor NAO extrai: a extracao roda no lado com GPU (hoje o notebook no
    Colab). O botao coloca o documento na fila, e o lado GPU consulta /api/fila.
@@ -903,6 +966,16 @@ async function pedirExtracao(i){
 async function analisarSelecionados(){
   if(parserRodando||selecionados.size===0) return;
   parserRodando=true; el("btn-parser").disabled=true;
+  var g=separar();
+  if(g.extraidos.length){
+    abrirPainel("Já extraídos",
+      '<p style="font-size:13px;line-height:1.7"><b>'+g.extraidos.length+'</b> dos selecionados já passaram pelo parser. '+
+      'Extrair de novo substituiria o resultado atual — e a curadoria feita à mão sobre eles.</p>'+
+      listaNomes(g.extraidos)+
+      (g.naoExtraidos.length ? '<div style="margin-top:14px;font-size:13px">Os outros <b>'+g.naoExtraidos.length+
+        '</b> serão colocados na fila.</div>' : ''));
+    if(!g.naoExtraidos.length){ parserRodando=false; el("btn-parser").disabled=false; return; }
+  }
   var pedidos=0, jaFeitos=0, falhas=[];
   for(const i of [...selecionados]){
     if(extraidos.has(i)){ selecionados.delete(i); jaFeitos++; continue; }
