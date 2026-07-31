@@ -48,7 +48,7 @@
   .hero-resumo{display:none;gap:18px;flex-wrap:wrap;font-size:13px;opacity:.95;margin-top:9px;}
   .home-hero.recolhido .hero-resumo{display:flex;}
   .hero-resumo b{font-size:15px;}
-  .busca-faixa{display:flex;align-items:center;gap:14px;margin:16px 0 2px;}
+  .busca-faixa{display:flex;align-items:center;gap:14px;margin:0 0 26px;}
   .busca-wrap{display:flex;align-items:center;gap:10px;border:1.5px solid var(--borda);border-radius:11px;
     padding:11px 15px;background:#fff;color:var(--cinza);flex:1;max-width:620px;
     box-shadow:0 1px 3px rgba(0,0,0,.05);transition:border-color .15s,box-shadow .15s;}
@@ -446,7 +446,14 @@
     </div>
     <div class="lista-topo">
       <div class="filtros" id="filtros"><span class="filtro-lbl">Categoria:</span></div>
-      <div class="filtros" id="filtros-sit"><span class="filtro-lbl">Situação:</span></div>
+      <div class="filtros"><span class="filtro-lbl">Situação:</span>
+        <select id="sit" onchange="mudarSituacao(this.value)" class="sel-ordem">
+          <option value="todas">Todas</option>
+          <option value="extraidos">Extraídos</option>
+          <option value="nao">Não extraídos</option>
+          <option value="vetorizados">Vetorizados</option>
+        </select>
+      </div>
       <div class="filtros">
         <button id="btn-sync" onclick="sincronizarCuradoria()" class="filtro" title="Consulta a API da Squad 1 e vê se há documentos novos">Buscar novos</button>
         <span id="sync-quando" style="font-size:11.5px;color:var(--cinza)"></span>
@@ -721,18 +728,8 @@ function montarFiltros(){
     box.appendChild(b);
   });
 }
-var SITUACOES=[["todas","Todas"],["extraidos","Extraídos"],["nao","Não extraídos"],["vetorizados","Vetorizados"]];
-function montarSituacoes(){
-  var c=el("filtros-sit"); if(!c) return;
-  c.querySelectorAll(".filtro").forEach(function(b){b.remove();});
-  SITUACOES.forEach(function(par){
-    var b=document.createElement("button");
-    b.className="filtro"+(par[0]===filtroSit?" ativo":"");
-    b.textContent=par[1];
-    b.onclick=function(){ filtroSit=par[0]; montarSituacoes(); renderHome(); };
-    c.appendChild(b);
-  });
-}
+function mudarSituacao(v){ filtroSit=v; MOSTRANDO=POR_PAGINA||1e9; renderHome(); }
+function montarSituacoes(){ var e=el("sit"); if(e) e.value=filtroSit; }
 function mudarOrdem(v){ ordem=v; renderHome(); }
 /* Aplica filtro e ordenacao, devolvendo os INDICES de IDX na ordem de exibicao.
    Trabalha com indices porque toda a tela (selecao, abrir, extrair) referencia
