@@ -135,7 +135,7 @@ def listar_documentos():
     ids = [p["id"] for p in pdfs]
     metas = (
         sb.table("article_metadata")
-        .select("pdf_id,title,authors,journal,year,doi")
+        .select("pdf_id,title,authors,journal,year,doi,category,document_type,keywords")
         .in_("pdf_id", ids)
         .execute()
         .data

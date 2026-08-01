@@ -650,7 +650,8 @@ function _meta(m){
   m = m || {};
   return { titulo:m.title||"(sem título)", autores:m.authors||"—", ano:m.year||"—",
            periodico:m.journal||"—", volume:"—", doi:m.doi||"—",
-           categoria:"—", tipo:"Artigo científico", palavras_chave:"" };
+           categoria:m.category||"—", tipo:m.document_type||"Artigo científico",
+           palavras_chave:m.keywords||"" };
 }
 function _counts(bs){
   return { tabelas:bs.filter(b=>b.tipo==="tabela").length,
