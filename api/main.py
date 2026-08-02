@@ -27,6 +27,11 @@ load_dotenv()
 
 sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
 
+# no topo, não dentro de cada função: as guardas de acesso agora estão em quase
+# todo endpoint, e um import local esquecido vira 500 em vez de 401 — falha
+# aberta, do lado errado
+from api import auth  # noqa: E402  (precisa do load_dotenv acima)
+
 ROOT = Path(__file__).resolve().parent.parent
 WEB_DIR = ROOT / "front"
 IMG_BUCKET = "images"
@@ -117,8 +122,9 @@ def _contagens(ids: list[str]) -> dict[str, dict]:
 
 
 @app.get("/api/documents", tags=["documentos"])
-def listar_documentos():
+def listar_documentos(pedido: Request):
     """Catálogo para a Home: um item por PDF, com metadados e status do pipeline."""
+    auth.exigir_usuario(pedido, sb)
     BASE = ("id,pdf_file,total_pages,approved,extracted,vectorized,"
             "approved_at,extracted_at,vectorized_at,extraction_time_ms,pipeline,created_at")
     try:
@@ -170,6 +176,7 @@ def listar_documentos():
 @app.get("/api/document/{pdf_id}", tags=["documentos"])
 def obter_documento(pdf_id: str, pedido: Request):
     """Documento completo para a tela de Extração: páginas, imagens e blocos (bbox + markdown)."""
+    auth.exigir_usuario(pedido, sb)
     limitar(pedido, "leitura", pdf_id)
     try:
         UUID(pdf_id)
@@ -260,6 +267,7 @@ def obter_pagina(pdf_id: str, n: int, pedido: Request):
     Uma página traz ~10 blocos. Sem limite de leitura aqui: navegar página a
     página é uso normal, e o limite por documento (5/min) travaria a leitura.
     """
+    auth.exigir_usuario(pedido, sb)
     blocos = (
         sb.table("page_blocks").select("page_number,block_type,markdown_text,bbox,layout")
         .eq("pdf_id", pdf_id).eq("page_number", n).execute().data
@@ -330,8 +338,9 @@ def _edicao_de(pdf_id: str) -> dict | None:
 
 
 @app.get("/api/document/{pdf_id}/edicao", tags=["edição"])
-def obter_edicao(pdf_id: str):
+def obter_edicao(pdf_id: str, pedido: Request):
     """Metadados da edição: se existe e quando foi feita."""
+    auth.exigir_usuario(pedido, sb)
     e = _edicao_de(pdf_id)
     if not e:
         return {"editado": False}
@@ -348,12 +357,16 @@ def salvar_edicao(pdf_id: str, edicao: Edicao, pedido: Request):
     Continua sendo UMA linha por documento: as páginas recebidas são fundidas nas
     que já estavam guardadas, e `edited_at` passa a ser o momento desta gravação.
     """
+    quem = auth.exigir_cargo(pedido, sb, "admin", "curador")
     if not sb.table("pdfs").select("id").eq("id", pdf_id).execute().data:
         raise HTTPException(404, "PDF não encontrado")
     limitar(pedido, "edicao", pdf_id)
     if edicao.layout is None and edicao.markdown is None:
         raise HTTPException(400, "envie 'layout' e/ou 'markdown'")
-    linha = {"pdf_id": pdf_id, "edited_by": edicao.edited_by}
+    # a autoria vem do token, não do corpo: `edited_by` é do cliente e qualquer
+    # um poderia assinar a edição com o nome de outro
+    autor = quem["email"]
+    linha = {"pdf_id": pdf_id, "edited_by": autor}
     if edicao.layout is not None:
         anterior = _edicao_de(pdf_id) or {}
         paginas = {p["n"]: p for p in (anterior.get("layout") or []) if "n" in p}
@@ -369,21 +382,22 @@ def salvar_edicao(pdf_id: str, edicao: Edicao, pedido: Request):
     except Exception as e:
         raise HTTPException(503, f"tabela document_edits indisponível — aplique "
                                  f"supabase/002_edicoes.sql. Detalhe: {e}")
-    registrar("documento_editado", edicao.edited_by, pdf_id,
+    registrar("documento_editado", autor, pdf_id,
               {"paginas": [p.get("n") for p in (edicao.layout or [])],
                "markdown": edicao.markdown is not None},
               pedido.client.host if pedido.client else None)
-    return obter_edicao(pdf_id)
+    return obter_edicao(pdf_id, pedido)
 
 
 @app.delete("/api/document/{pdf_id}/edicao", tags=["edição"])
-def descartar_edicao(pdf_id: str):
+def descartar_edicao(pdf_id: str, pedido: Request):
     """Joga fora a edição e volta ao que a extração produziu."""
+    quem = auth.exigir_cargo(pedido, sb, "admin", "curador")
     try:
         sb.table("document_edits").delete().eq("pdf_id", pdf_id).execute()
     except Exception as e:
         raise HTTPException(503, f"tabela document_edits indisponível: {e}")
-    registrar("edicao_descartada", None, pdf_id)
+    registrar("edicao_descartada", quem["email"], pdf_id)
     return {"editado": False}
 
 
@@ -418,16 +432,21 @@ def registrar(evento: str, ator=None, alvo=None, detalhe=None, ip=None) -> None:
 @app.post("/api/log", tags=["auditoria"])
 def anotar(ev: EventoLog, pedido: Request):
     """Usado pelo front para registrar login e logout."""
+    quem = auth.exigir_usuario(pedido, sb)
     if ev.evento not in EVENTOS:
         raise HTTPException(400, f"evento desconhecido; use um de {sorted(EVENTOS)}")
-    registrar(ev.evento, ev.ator, ev.alvo, ev.detalhe,
+    # o ator vem do token: uma trilha de auditoria em que o cliente escolhe o
+    # próprio nome não serve para auditar nada
+    registrar(ev.evento, quem["email"], ev.alvo, ev.detalhe,
               pedido.client.host if pedido.client else None)
     return {"ok": True}
 
 
 @app.get("/api/log", tags=["auditoria"])
-def historico(limite: int = 200, evento: str | None = None, alvo: str | None = None):
+def historico(pedido: Request, limite: int = 200, evento: str | None = None,
+              alvo: str | None = None):
     """Histórico, do mais recente para o mais antigo."""
+    auth.exigir_usuario(pedido, sb)
     try:
         q = sb.table("audit_log").select("*").order("criado_em", desc=True).limit(min(limite, 1000))
         if evento:
@@ -452,6 +471,7 @@ class PedidoExtracao(BaseModel):
 @app.post("/api/document/{pdf_id}/extrair", tags=["extração"])
 def pedir_extracao(pdf_id: str, pedido_ext: PedidoExtracao, pedido: Request):
     """Coloca o documento na fila de extração. NÃO extrai aqui."""
+    quem = auth.exigir_cargo(pedido, sb, "admin", "curador")
     linha = sb.table("pdfs").select("id,pdf_file,extracted,extraction_requested_at")         .eq("id", pdf_id).execute().data
     if not linha:
         raise HTTPException(404, "PDF não encontrado")
@@ -461,11 +481,11 @@ def pedir_extracao(pdf_id: str, pedido_ext: PedidoExtracao, pedido: Request):
     agora = datetime.now(timezone.utc).isoformat()
     try:
         sb.table("pdfs").update({"extraction_requested_at": agora,
-                                 "extraction_requested_by": pedido_ext.solicitado_por})             .eq("id", pdf_id).execute()
+                                 "extraction_requested_by": quem["email"]})             .eq("id", pdf_id).execute()
     except Exception as e:
         raise HTTPException(503, f"colunas da fila ausentes — aplique "
                                  f"supabase/005_fila_extracao.sql. Detalhe: {e}")
-    registrar("extracao_solicitada", pedido_ext.solicitado_por, pdf_id,
+    registrar("extracao_solicitada", quem["email"], pdf_id,
               {"arquivo": linha[0]["pdf_file"]},
               pedido.client.host if pedido.client else None)
     return {"na_fila": True, "solicitado_em": agora,
@@ -473,8 +493,9 @@ def pedir_extracao(pdf_id: str, pedido_ext: PedidoExtracao, pedido: Request):
 
 
 @app.get("/api/fila", tags=["extração"])
-def fila_extracao():
+def fila_extracao(pedido: Request):
     """O que está pedido e ainda não foi extraído — é isto que o lado GPU consulta."""
+    auth.exigir_worker(pedido)
     try:
         return (sb.table("pdfs")
                 .select("id,pdf_file,total_pages,extraction_requested_at,extraction_requested_by")
@@ -500,15 +521,17 @@ class Heartbeat(BaseModel):
 
 
 @app.post("/api/worker/heartbeat", tags=["extração"])
-def worker_heartbeat(hb: Heartbeat):
+def worker_heartbeat(hb: Heartbeat, pedido: Request):
     """Chamado pelo lado GPU. Sem isso, o site mostra 'sem worker conectado'."""
+    auth.exigir_worker(pedido)
     registrar("worker_heartbeat", "worker", None, hb.model_dump())
     return {"ok": True}
 
 
 @app.get("/api/worker", tags=["extração"])
-def worker_estado():
+def worker_estado(pedido: Request):
     """Último heartbeat + há quanto tempo. É o que a página de Extração mostra."""
+    auth.exigir_usuario(pedido, sb)   # quem lê é o site, não o worker
     try:
         r = (sb.table("audit_log").select("detalhe,criado_em")
              .eq("evento", "worker_heartbeat")
@@ -538,8 +561,9 @@ def worker_estado():
 # sincronizacao fica no audit_log, e e' o que o site mostra ao abrir.
 
 @app.get("/api/curadoria/ultima", tags=["curadoria"])
-def curadoria_ultima():
+def curadoria_ultima(pedido: Request):
     """Quando foi a última sincronização e o que ela achou."""
+    auth.exigir_usuario(pedido, sb)
     try:
         r = (sb.table("audit_log").select("detalhe,criado_em,ator")
              .eq("evento", "metadados_sincronizados")
@@ -555,13 +579,14 @@ def curadoria_ultima():
 @app.post("/api/curadoria/sincronizar", tags=["curadoria"])
 def curadoria_sincronizar(pedido: Request, gravar: bool = True):
     """Consulta a API de curadoria e atualiza os metadados. Acionado pelo botão."""
+    quem = auth.exigir_cargo(pedido, sb, "admin", "curador")
     limitar(pedido, "edicao", "curadoria")      # a API de fora nao aguenta laco
     try:
         from api import curadoria
         resumo = curadoria.sincronizar(sb, gravar=gravar)
     except Exception as e:
         raise HTTPException(502, f"não deu para falar com a API de curadoria: {e}")
-    registrar("metadados_sincronizados", "site", None,
+    registrar("metadados_sincronizados", quem["email"], None,
               {k: v for k, v in resumo.items() if k != "novos_exemplos"},
               pedido.client.host if pedido.client else None)
     return resumo
@@ -585,7 +610,6 @@ class NovoIntegrante(BaseModel):
 
 @app.post("/api/auth/login", tags=["equipe"])
 def auth_login(cred: Credencial, pedido: Request):
-    from api import auth
     limitar(pedido, "edicao", "login")        # trava tentativa em laco
     r = auth.entrar(cred.email, cred.senha)
     perfil = sb.table("profiles").select("*").eq("id", r["usuario"]["id"]).execute().data
@@ -599,14 +623,12 @@ def auth_login(cred: Credencial, pedido: Request):
 @app.get("/api/auth/eu", tags=["equipe"])
 def auth_eu(pedido: Request):
     """Quem sou eu. O front usa para saber se a sessao ainda vale."""
-    from api import auth
     u = auth.usuario_do(pedido, sb)
     return {"autenticado": bool(u), "usuario": u}
 
 
 @app.get("/api/equipe", tags=["equipe"])
 def equipe_listar(pedido: Request):
-    from api import auth
     auth.exigir_usuario(pedido, sb)
     perfis = sb.table("profiles").select("*").execute().data
     return sorted(perfis, key=lambda p: (p.get("role") or "", p.get("name") or ""))
@@ -615,7 +637,6 @@ def equipe_listar(pedido: Request):
 @app.post("/api/equipe", tags=["equipe"])
 def equipe_criar(novo: NovoIntegrante, pedido: Request):
     """Cadastra um integrante. So' admin — e nunca por auto-registro."""
-    from api import auth
     quem = auth.exigir_cargo(pedido, sb, "admin")
     limitar(pedido, "edicao", "equipe")
     if novo.cargo not in auth.CARGOS:
@@ -653,7 +674,6 @@ def _admins_restantes(excluindo: str | None = None) -> int:
 @app.patch("/api/equipe/{uid}", tags=["equipe"])
 def equipe_editar(uid: str, mudanca: EdicaoIntegrante, pedido: Request):
     """Altera nome, cargo ou senha de um integrante. Só admin."""
-    from api import auth
     quem = auth.exigir_cargo(pedido, sb, "admin")
     limitar(pedido, "edicao", "equipe")
 
@@ -702,7 +722,6 @@ def equipe_remover(uid: str, pedido: Request):
     ninguém mais conseguiria cadastrar ou remover ninguém, e a recuperação
     exigiria mexer no painel do Supabase.
     """
-    from api import auth
     quem = auth.exigir_cargo(pedido, sb, "admin")
     limitar(pedido, "edicao", "equipe")
 
@@ -746,7 +765,6 @@ def auth_editar_eu(dados: MinhaConta, pedido: Request):
     sério: sem isso, um computador deixado aberto vira sequestro de conta.
     Trocar so' o nome nao exige, porque nao muda quem pode entrar.
     """
-    from api import auth
     eu = auth.exigir_usuario(pedido, sb)
     limitar(pedido, "edicao", "conta")
 
@@ -803,7 +821,10 @@ def health():
     """Sonda de saúde: confirma que a API responde e o Supabase está acessível."""
     try:
         sb.table("pdfs").select("id").limit(1).execute()
-        return {"status": "ok", "supabase": "ok"}
+        # visível de fora de propósito: enquanto WORKER_TOKEN não estiver
+        # definido, /api/fila e o heartbeat aceitam qualquer um
+        return {"status": "ok", "supabase": "ok",
+                "worker_protegido": bool(auth.WORKER_TOKEN)}
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Supabase indisponível: {e}")
 

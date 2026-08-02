@@ -12,6 +12,7 @@ O perfil (nome e cargo) fica em `public.profiles`, com o mesmo id do usuário do
 Auth. O Auth guarda a credencial; o profile, quem é a pessoa aqui dentro.
 """
 import os
+from hmac import compare_digest
 
 from fastapi import HTTPException, Request
 from supabase import create_client
@@ -71,6 +72,24 @@ def exigir_cargo(pedido: Request, sb, *cargos: str) -> dict:
     if cargos and u["cargo"] not in cargos:
         raise HTTPException(403, f"esta ação exige cargo: {', '.join(cargos)}")
     return u
+
+
+WORKER_TOKEN = os.environ.get("WORKER_TOKEN", "").strip()
+
+
+def exigir_worker(pedido: Request) -> None:
+    """Autentica o lado com GPU, que não tem usuário — manda `X-Worker-Token`.
+
+    Com WORKER_TOKEN vazio os endpoints do worker ficam ABERTOS. É o estado de
+    hoje e está assim de propósito: o notebook de extração ainda não manda o
+    cabeçalho, e exigir agora derrubaria a fila sem aviso. `/api/health` reporta
+    `worker_protegido: false` para isso não virar buraco silencioso.
+    """
+    if not WORKER_TOKEN:
+        return
+    enviado = (pedido.headers.get("X-Worker-Token") or "").strip()
+    if not compare_digest(enviado, WORKER_TOKEN):
+        raise HTTPException(401, "cabeçalho X-Worker-Token ausente ou incorreto")
 
 
 def entrar(email: str, senha: str) -> dict:
