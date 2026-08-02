@@ -61,8 +61,8 @@ def varrer_disco() -> dict[str, Path]:
 
 def ler_banco() -> set[str]:
     """Slugs já registrados. Inclui os de `document_url` porque um PDF pode ter
-    entrado com nome próprio (boletim-100-chandra) antes de a curadoria existir:
-    é o mesmo documento, e sem isso ele seria baixado e registrado de novo."""
+    entrado com nome próprio antes de a curadoria existir: é o mesmo documento,
+    e sem isso ele voltaria à fila e entraria duplicado."""
     linhas = sb.table("pdfs").select("pdf_file,document_url").execute().data
     slugs = {p["pdf_file"] for p in linhas}
     slugs |= {curadoria.slug_de(p["document_url"]) for p in linhas if p.get("document_url")}
