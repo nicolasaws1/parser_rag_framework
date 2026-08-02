@@ -42,27 +42,24 @@ tipos de coluna vêm do esquema OpenAPI do PostgREST e conferem. **Defaults e
 nomes de constraint não são visíveis por introspecção** e foram inferidos do
 uso no código — precisam de uma passada antes de valer como origem da verdade.
 
-### 2. RLS desligada nas tabelas centrais  — em aberto
+### 2. RLS desligada nas tabelas centrais  — resolvido em 2026-08-02
 
-A chave anon lê hoje, sem restrição:
+A chave anon lia, sem restrição, `pdfs`, `page_images`, `page_blocks`,
+`article_metadata`, `audit_log` e `profiles` — a lista de usuários e cargos.
 
-```
-pdfs  page_images  page_blocks  article_metadata  profiles  audit_log
-```
+`007_rls.sql` fechou: RLS ligada e forçada nas oito tabelas, sem política
+nenhuma, mais `revoke` do GRANT de `anon`/`authenticated`. Conferido com
+`scripts/checar_rls.py`: as nove relações respondem 401 para a chave anon, e a
+`service_role` continua lendo e escrevendo normalmente.
 
-Inclusive `profiles`, que é a lista de usuários e cargos.
+O que a RLS **não** resolve, e por isso quase passou batido: a `service_role`
+ignora RLS por desenho, e é ela que o FastAPI usa. Separação por cargo não pode
+morar no banco enquanto for assim — mora em `api/auth.py:exigir_cargo`.
 
-Hoje isso não vaza, porque a chave anon nunca chega ao navegador. Mas o motivo
-de estar seguro é acidental: é a topologia atual, não uma regra. No momento em
-que o Supabase local ficar acessível na rede, qualquer um com a chave anon lê o
-acervo inteiro e a lista de quem tem acesso.
-
-Ligar RLS exige decidir o que cada cargo (`admin` / `curador` / `leitor`)
-enxerga — decisão de produto, não detalhe técnico. Por isso ficou explícito no
-`001` em vez de resolvido em silêncio.
-
-Vale junto: os endpoints de edição ainda não checam cargo. Um `leitor`
-autenticado hoje edita documento.
+E ali o buraco era maior do que "um leitor edita documento": nenhum endpoint de
+escrita pedia token. Sem login algum dava para editar, descartar edição, pedir
+extração e disparar a sincronização. Agora leitura exige usuário e escrita
+exige `admin` ou `curador`.
 
 ### 3. Usuários não atravessam por REST
 
@@ -78,16 +75,20 @@ imagem, o compose amarrando API + Supabase + Qdrant, e o `cloudflared`.
 ## Ordem sugerida
 
 1. Conferir o `001` contra o banco vivo (defaults, constraints, cascatas).
-2. Subir um Supabase local vazio e rodar `001` → `006`. Se subir limpo, o repo
+2. Subir um Supabase local vazio e rodar `001` → `007`. Se subir limpo, o repo
    passa a ser origem da verdade.
-3. Decidir a política de RLS por cargo e escrever como `007`.
-4. Copiar dados: tabelas por REST, buckets por download/upload.
-5. Recriar as contas, apagando as de teste.
-6. Dockerfile + compose.
+3. Copiar dados: tabelas por REST, buckets por download/upload.
+4. Recriar as contas, apagando as de teste.
+5. Dockerfile + compose.
 
 Só depois disso a troca de `SUPABASE_URL` no `.env` é uma mudança de uma linha.
 
 ## À parte
 
-A chave da API do Qdrant foi colada no chat e está no `PDFExtractor.py` antigo.
-Trocar antes de o servidor ir ao ar.
+- **Chave do Qdrant**: circulou fora do repositório e está num script antigo
+  (`PDFExtractor.py`). Trocar antes de o servidor ir ao ar.
+- **`WORKER_TOKEN`**: enquanto a variável não existir, `/api/fila` e
+  `/api/worker/heartbeat` aceitam qualquer chamada — o lado GPU ainda não manda
+  o cabeçalho `X-Worker-Token`, e exigir agora derrubaria a fila. `/api/health`
+  responde `worker_protegido: false` justamente para isso não passar batido.
+  Fechar junto com o deploy, quando o notebook passar a mandar o cabeçalho.
