@@ -8,8 +8,12 @@ Reconcilia as três fontes de verdade dos PDFs aprovados e fecha as lacunas.
     python scripts/acervo.py                    # situação (não escreve nada)
     python scripts/acervo.py --baixar           # busca na API só o que falta no disco
     python scripts/acervo.py --registrar        # cria no banco o que já está no disco
-    python scripts/acervo.py --tudo             # os dois, na ordem
+    python scripts/acervo.py --binarios         # sobe ao bucket o PDF que falta
+    python scripts/acervo.py --tudo             # os três, na ordem
     python scripts/acervo.py --verificar        # relê cada PDF do disco (lento)
+
+A curadoria manda: só entra no banco o que ela aprova. PDF solto na pasta é
+listado como extra e ignorado — nenhuma ação aqui registra fora dessa lista.
 
 Baixar e registrar são separados de propósito: quase todo PDF aprovado já está
 no disco, e re-baixar 180 arquivos que já temos é desperdício. O download é só
@@ -69,6 +73,19 @@ def ler_banco() -> set[str]:
     return slugs
 
 
+def ler_storage() -> set[str]:
+    """Nomes no bucket `pdfs`. Pagina: list() devolve 100 por vez em silêncio,
+    e sem paginar 130 arquivos existentes passam por ausentes."""
+    nomes: list[str] = []
+    passo = 100
+    while True:
+        lote = sb.storage.from_("pdfs").list(options={"limit": passo, "offset": len(nomes)})
+        if not lote:
+            break
+        nomes += [o["name"] for o in lote]
+    return {n for n in nomes if n.lower().endswith(".pdf")}
+
+
 def situacao() -> dict:
     aprov = curadoria.aprovados(curadoria.baixar())
     por_slug = {curadoria.slug_de(n): n for n in aprov}
@@ -85,6 +102,11 @@ def situacao() -> dict:
         else:
             est["completos"].append((s, nome))
     est["extras"] = sorted(s for s in disco if s not in por_slug)
+    # registro sem binário: o site abre o documento e não acha o PDF. Já
+    # aconteceu com 6 dos primeiros, subidos por um script que só gravava a linha
+    guardados = ler_storage()
+    est["sem_binario"] = sorted(s for s in por_slug if s in banco and s not in guardados)
+    est["storage"] = guardados
     return est
 
 
@@ -93,13 +115,18 @@ def imprimir(est: dict) -> None:
     print(f"curadoria .... {n} aprovados")
     print(f"disco ........ {len(est['disco'])} PDFs em {PASTA}")
     print(f"banco ........ {len(est['banco'])} registros no Supabase")
+    print(f"storage ...... {len(est['storage'])} PDFs no bucket")
     print()
     print(f"  completos (disco + banco) .......... {len(est['completos']):>4}")
     print(f"  no disco, falta registrar .......... {len(est['registrar']):>4}")
     print(f"  falta baixar da API ................ {len(est['baixar']):>4}")
     print(f"  {'':->38} {n:>4}")
+    if est["sem_binario"]:
+        print(f"\n  registrados SEM o PDF no storage ... {len(est['sem_binario']):>4}  <- --binarios")
+        for s in est["sem_binario"][:6]:
+            print(f"      {s[:66]}")
     if est["extras"]:
-        print(f"\n  no disco sem par na curadoria ...... {len(est['extras']):>4}")
+        print(f"\n  no disco, fora da curadoria ....... {len(est['extras']):>4}  (ignorados)")
         for s in est["extras"][:6]:
             print(f"      {est['disco'][s].name[:66]}")
     sobra = est["banco"] - set(est["slug_para_nome"])
@@ -216,6 +243,22 @@ def registrar(est: dict) -> None:
     print(f"\nregistrados {ok}, erros {erros}")
 
 
+def binarios(est: dict) -> None:
+    """Sobe ao bucket o PDF de quem tem registro mas não tem arquivo."""
+    fila = [s for s in est["sem_binario"] if s in est["disco"]]
+    orfaos = [s for s in est["sem_binario"] if s not in est["disco"]]
+    if orfaos:
+        print(f"{len(orfaos)} sem arquivo no disco — rode --baixar antes")
+    if not fila:
+        print("nada a subir")
+        return
+    for i, s in enumerate(fila, 1):
+        d = est["disco"][s].read_bytes()
+        sb.storage.from_("pdfs").upload(s, d, {"content-type": "application/pdf",
+                                               "upsert": "true"})
+        print(f"  [{i:>3}/{len(fila)}] {len(d)/1024:>7.0f} KB  {s[:56]}")
+
+
 def verificar(est: dict) -> None:
     """Abre cada PDF do disco. Trunca/corrompido conta como ausente."""
     ruins = []
@@ -243,6 +286,9 @@ def main() -> None:
     if arg & {"--registrar", "--tudo"}:
         print()
         registrar(est)
+    if arg & {"--binarios", "--tudo"}:
+        print()
+        binarios(est)
     if "--verificar" in arg:
         print()
         verificar(est)
