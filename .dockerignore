@@ -1,0 +1,17 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+extractor/          # roda no lado com GPU, não entra na imagem da API
+docs/
+supabase/
+deploy/certs/       # chave privada nunca vai para dentro da imagem
+*.md
+*.pdf

@@ -1,0 +1,47 @@
+# TLS na origem, para o Cloudflare poder usar "Full (strict)".
+#
+# O certificado é o **Origin Certificate** do Cloudflare, emitido no painel da
+# zona (SSL/TLS -> Origin Server -> Create Certificate). Vale 15 anos, é grátis e
+# só o Cloudflare confia nele — que é exatamente o necessário aqui, já que
+# ninguém acessa a origem direto.
+#
+# Por que não Let's Encrypt: ele exige que o domínio já aponte para este
+# servidor, e o combinado é o contrário — o site tem de estar de pé ANTES de o
+# domínio existir. O certificado de origem resolve essa ordem.
+#
+# Ponha os dois arquivos em deploy/certs/ com estes nomes:
+#     origin.pem   (o certificado)
+#     origin.key   (a chave privada)
+
+{$DOMINIO:sb100.localhost} {
+	tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
+
+	encode zstd gzip
+
+	# o navegador precisa saber que veio por HTTPS; sem isto o FastAPI monta
+	# URL http:// atrás do proxy
+	reverse_proxy api:8000 {
+		header_up X-Forwarded-Proto https
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
+
+# Sem certificado ainda? Troque o bloco acima por este para subir com um
+# certificado interno do próprio Caddy e provar que a aplicação responde:
+#
+# {$DOMINIO:sb100.localhost} {
+# 	tls internal
+# 	reverse_proxy api:8000
+# }

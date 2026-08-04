@@ -1,0 +1,46 @@
+# Sobe o site em HTTPS no servidor, pronto para o Cloudflare apontar o domínio.
+#
+#   cp .env.example .env    # e preencha
+#   docker compose up -d --build
+#
+# O Supabase NÃO está aqui de propósito: a API fala com o Supabase Cloud pelas
+# variáveis do .env. Trocar para um Supabase local depois é trocar SUPABASE_URL,
+# não refazer isto. Ver docs/deploy.md.
+
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # fecha /api/fila e o heartbeat: só quem manda X-Worker-Token entra.
+      # Sem esta variável eles ficam ABERTOS (/api/health denuncia).
+      WORKER_TOKEN: ${WORKER_TOKEN:?defina WORKER_TOKEN no .env}
+    expose:
+      - "8000"
+    # sem `ports`: a API não recebe conexão de fora do host, só do caddy.
+    # Quem termina TLS é o caddy, e é o único que publica porta.
+    networks: [sb100]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/certs:/etc/caddy/certs:ro     # certificado de origem do Cloudflare
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [sb100]
+
+networks:
+  sb100:
+
+volumes:
+  caddy_data:
+  caddy_config:
