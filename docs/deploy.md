@@ -63,21 +63,22 @@ provar que funciona antes de pedir qualquer coisa a quem administra.
 
 O detalhe que morde: o Caddy só responde para o hostname que está no `.env`.
 Com `DOMINIO=localhost`, acessar `https://10.147.20.5` de outra máquina não casa
-com nenhum site e o Caddy devolve erro. Duas saídas:
+com nenhum site e o Caddy devolve erro. Ponha o IP ZeroTier do servidor:
 
 ```bash
-DOMINIO=10.147.20.5     # o IP ZeroTier do servidor
+DOMINIO=10.147.20.5
 ```
 
-ou, para responder em qualquer nome ou IP:
+O Caddy emite certificado interno para endereço IP, então isso funciona.
 
-```bash
-DOMINIO=:443
-```
+> Existe a forma `DOMINIO=:443`, que responde a qualquer nome ou IP. **Não use
+> junto com `tls internal`**: sem um nome, o emissor interno não tem para quem
+> emitir, e não deu para testar aqui o que o Caddy faz nesse caso. Com o
+> certificado de origem (`Caddyfile.origem`) o `:443` é seguro, porque o
+> certificado já vem pronto.
 
-O `:443` é prático enquanto se testa. Quando o domínio real entrar, troque pelo
-hostname — assim o Caddy passa a recusar acesso por outro nome, que é o que se
-quer em produção.
+Quando o domínio real entrar, troque pelo hostname — aí o Caddy passa a recusar
+acesso por outro nome, que é o que se quer em produção.
 
 O navegador vai avisar do certificado; é o certificado interno do Caddy, e o
 aviso é esperado. Para confirmar por linha de comando:
