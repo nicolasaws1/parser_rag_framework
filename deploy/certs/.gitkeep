@@ -1,0 +1,2 @@
+Ponha aqui origin.pem e origin.key quando o certificado do Cloudflare chegar.
+Os dois estao no .gitignore (*.pem, *.key) e no .dockerignore.

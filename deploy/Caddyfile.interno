@@ -1,0 +1,31 @@
+# HTTPS com certificado que o próprio Caddy gera. É o padrão do compose.
+#
+# Serve para subir HOJE, sem depender de ninguém: a aplicação fica de pé em
+# HTTPS e dá para provar que responde. O navegador reclama se você acessar a
+# origem direto — é esperado, ninguém assinou esse certificado.
+#
+# O Cloudflare em modo "Full" aceita origem com certificado próprio. Para
+# "Full (strict)", troque para o Caddyfile.origem quando o certificado de origem
+# chegar: é mudar CADDYFILE no .env e reiniciar, sem rebuild.
+
+{$DOMINIO:localhost} {
+	tls internal
+
+	encode zstd gzip
+
+	reverse_proxy api:8000 {
+		header_up X-Forwarded-Proto https
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

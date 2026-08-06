@@ -28,9 +28,14 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      DOMINIO: ${DOMINIO:-localhost}
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./deploy/certs:/etc/caddy/certs:ro     # certificado de origem do Cloudflare
+      # Caddyfile.interno (padrão) sobe HTTPS com certificado do próprio Caddy,
+      # sem depender de ninguém. Quando o Origin Certificate chegar, troque para
+      # CADDYFILE=Caddyfile.origem no .env e reinicie — sem rebuild.
+      - ./deploy/${CADDYFILE:-Caddyfile.interno}:/etc/caddy/Caddyfile:ro
+      - ./deploy/certs:/etc/caddy/certs:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

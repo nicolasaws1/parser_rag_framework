@@ -26,24 +26,34 @@ Se a ordem fosse a inversa, o domínio ficaria esperando a parte difícil.
 Só o Caddy publica porta. A API fica na rede do compose, sem `ports:` — não
 aceita conexão de fora do host. Quem termina TLS é o Caddy.
 
-## Certificado
+## Certificado — não espere por ele
 
-Use o **Origin Certificate** do Cloudflare, não o Let's Encrypt.
+**Dá para subir hoje, sem certificado e sem domínio.** É o padrão do compose: o
+`Caddyfile.interno` usa um certificado que o próprio Caddy gera. A aplicação
+fica de pé em HTTPS e você prova que responde. O navegador reclama se você
+acessar a origem direto — esperado, ninguém assinou aquilo — mas o Cloudflare em
+modo **Full** aceita origem assim.
 
-O Let's Encrypt exige que o domínio já aponte para este servidor para validar, e
-o combinado é o contrário. O certificado de origem é emitido no painel da zona
-(SSL/TLS → Origin Server → Create Certificate), vale 15 anos, é grátis, e só o
-Cloudflare confia nele — que é tudo o que precisamos, já que ninguém acessa a
-origem direto. Com ele dá para ligar **Full (strict)** no Cloudflare.
+Quando o **Origin Certificate** chegar, é trocar uma linha no `.env`:
 
-Quem tem acesso à zona emite: nós não temos o domínio. Peça os dois arquivos e
-ponha em `deploy/certs/` como `origin.pem` e `origin.key`.
+```
+CADDYFILE=Caddyfile.origem
+```
 
-> **Alternativa que dispensa certificado:** um túnel `cloudflared`. A origem
-> serve HTTP em localhost, o túnel sai de dentro para fora e **nenhuma porta de
-> entrada é aberta no servidor**. Se ele preferir, é mais simples e mais seguro
-> que abrir 443 — e o `docker-compose.yml` fica sem o serviço `caddy`. Vale
-> perguntar, porque ele é quem conhece o padrão da casa.
+e `docker compose up -d`. Sem rebuild, sem downtime relevante. Aí dá para ligar
+**Full (strict)**.
+
+O certificado sai do painel da zona (SSL/TLS → Origin Server → Create
+Certificate), vale 15 anos e é grátis. **Quem tem a zona emite** — nós não temos
+o domínio. Peça `origin.pem` e `origin.key` e ponha em `deploy/certs/`.
+
+Não use Let's Encrypt: ele exige o domínio já apontando para este servidor, e a
+ordem combinada é a inversa.
+
+> **Alternativa que dispensa certificado de vez:** um túnel `cloudflared`. A
+> origem serve HTTP, o túnel sai de dentro para fora e **nenhuma porta de entrada
+> é aberta no servidor**. Mais simples e mais seguro que abrir a 443, e o
+> `caddy` sai do compose. Vale perguntar — ele é quem conhece o padrão da casa.
 
 ## Passo a passo
 
@@ -65,7 +75,8 @@ Preencha o `.env`:
 `WORKER_TOKEN` é obrigatório no compose — ele se recusa a subir sem. É o que
 fecha `/api/fila` e o heartbeat, que hoje aceitam qualquer chamada.
 
-Coloque `origin.pem` e `origin.key` em `deploy/certs/`, e então:
+`DOMINIO` pode ficar `localhost` enquanto o domínio não existir, e `CADDYFILE`
+pode ficar no padrão. Nada disso impede de subir:
 
 ```bash
 docker compose up -d --build

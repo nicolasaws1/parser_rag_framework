@@ -1,0 +1,40 @@
+# HTTPS com o Origin Certificate do Cloudflare. Use quando ele entregar os
+# arquivos; até lá o compose usa o Caddyfile.interno.
+#
+# O certificado sai do painel da zona (SSL/TLS -> Origin Server -> Create
+# Certificate). Vale 15 anos, é grátis, e só o Cloudflare confia nele — que é o
+# suficiente, já que ninguém acessa a origem direto. Com ele dá para ligar
+# "Full (strict)".
+#
+# Ponha os dois arquivos em deploy/certs/ com estes nomes exatos e troque
+# CADDYFILE=Caddyfile.origem no .env:
+#     origin.pem   (certificado)
+#     origin.key   (chave privada)
+#
+# Por que não Let's Encrypt: ele exige o domínio já apontando para este
+# servidor, e a ordem combinada é a inversa — o site de pé primeiro.
+
+{$DOMINIO:localhost} {
+	tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
+
+	encode zstd gzip
+
+	reverse_proxy api:8000 {
+		header_up X-Forwarded-Proto https
+	}
+
+	header {
+		# só aqui: prometer HSTS com certificado interno prende o navegador
+		# num host que ainda não tem certificado de verdade
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
