@@ -94,10 +94,23 @@ O notebook de extração precisa passar a mandar `X-Worker-Token` ao consultar
 `/api/fila` e ao bater heartbeat — senão a fila para de ser vista pelo lado GPU.
 É a única coisa que quebra com o `WORKER_TOKEN` ligado, e quebra em silêncio.
 
-## O que ainda não foi testado
+## O que foi testado sem Docker, e o que não dá para testar sem ele
 
-O `Dockerfile` e o `docker-compose.yml` foram escritos sem Docker na máquina de
-desenvolvimento — **nunca rodaram**. O primeiro `docker compose up --build` no
-servidor é o primeiro teste real. Erro provável: alguma dependência de sistema
-que o `pymupdf` precise no `python:3.12-slim`. Se acontecer, aparece no build,
-não em produção.
+Não há Docker na máquina de desenvolvimento. Estas partes foram verificadas
+uma a uma, fora do contêiner:
+
+| verificado | resultado |
+|---|---|
+| todo pacote tem wheel manylinux cp312 | sim — nada compila, `python:3.12-slim` basta sem `gcc` |
+| `pymupdf` precisa de biblioteca do sistema | não — a wheel é `abi3` manylinux_2_28 e a base tem glibc 2.36 |
+| o `CMD` sobe a aplicação | sim |
+| o `HEALTHCHECK` devolve 0 com a API viva | sim |
+| `WORKER_TOKEN` fecha `/api/fila` e o heartbeat | sim — 5 casos: sem token, token errado e token certo |
+| `/api/health` reflete o token | sim — `worker_protegido: true` |
+| YAML do compose | válido |
+| chave privada fora do git e da imagem | `.gitignore` e `.dockerignore` cobrem |
+
+**O que só o servidor prova:** a montagem dos volumes, a rede entre `caddy` e
+`api`, o `depends_on: service_healthy`, e o certificado sendo aceito. Nenhum
+deles depende de código nosso — se falharem, falham no `up`, com mensagem
+clara, e não em produção.
