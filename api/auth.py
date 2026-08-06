@@ -77,19 +77,35 @@ def exigir_cargo(pedido: Request, sb, *cargos: str) -> dict:
 WORKER_TOKEN = os.environ.get("WORKER_TOKEN", "").strip()
 
 
-def exigir_worker(pedido: Request) -> None:
-    """Autentica o lado com GPU, que não tem usuário — manda `X-Worker-Token`.
+def tem_token_worker(pedido: Request) -> bool:
+    if not WORKER_TOKEN:
+        return False
+    return compare_digest((pedido.headers.get("X-Worker-Token") or "").strip(), WORKER_TOKEN)
 
-    Com WORKER_TOKEN vazio os endpoints do worker ficam ABERTOS. É o estado de
-    hoje e está assim de propósito: o notebook de extração ainda não manda o
-    cabeçalho, e exigir agora derrubaria a fila sem aviso. `/api/health` reporta
+
+def exigir_worker(pedido: Request) -> None:
+    """Só o lado com GPU: manda `X-Worker-Token`, não tem usuário.
+
+    Com WORKER_TOKEN vazio fica ABERTO — estado de hoje, e `/api/health` reporta
     `worker_protegido: false` para isso não virar buraco silencioso.
     """
     if not WORKER_TOKEN:
         return
-    enviado = (pedido.headers.get("X-Worker-Token") or "").strip()
-    if not compare_digest(enviado, WORKER_TOKEN):
+    if not tem_token_worker(pedido):
         raise HTTPException(401, "cabeçalho X-Worker-Token ausente ou incorreto")
+
+
+def exigir_worker_ou_usuario(pedido: Request, sb) -> None:
+    """Para o que a GPU e a equipe leem igual — hoje, a fila.
+
+    A tela de Extração mostra a fila para quem está logado; a GPU consulta a
+    mesma rota com o token de worker. Exigir só o token de worker fazia o front
+    levar 401 com a contagem caindo para zero **sem erro na tela**, porque a
+    chamada está dentro de um try/catch que devolve lista vazia.
+    """
+    if WORKER_TOKEN and tem_token_worker(pedido):
+        return
+    exigir_usuario(pedido, sb)
 
 
 def entrar(email: str, senha: str) -> dict:

@@ -103,6 +103,16 @@ def main() -> None:
     else:
         checar("leitor barrado na edição", w.status_code == 403, f"HTTP {w.status_code}")
 
+    # ── fila: a tela de Extração lê com token de usuário ────────────────────
+    # A mesma rota serve a GPU (que manda X-Worker-Token). Se ela voltar a exigir
+    # só o token de worker, o front leva 401 dentro de um try/catch e a fila
+    # aparece como zero, sem erro na tela — falha silenciosa.
+    r = requests.get(f"{base}/api/fila", headers=h, timeout=60)
+    checar("fila visível para usuário logado", r.status_code == 200, f"HTTP {r.status_code}")
+
+    r = requests.get(f"{base}/api/worker", headers=h, timeout=60)
+    checar("estado do worker visível", r.status_code == 200, f"HTTP {r.status_code}")
+
     # ── limite de taxa ──────────────────────────────────────────────────────
     # 5 por minuto por documento. A 6ª tem de voltar 429.
     codigos = [requests.get(f"{base}/api/document/{alvo['id']}", headers=h, timeout=280).status_code

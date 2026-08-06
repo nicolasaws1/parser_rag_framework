@@ -494,8 +494,8 @@ def pedir_extracao(pdf_id: str, pedido_ext: PedidoExtracao, pedido: Request):
 
 @app.get("/api/fila", tags=["extração"])
 def fila_extracao(pedido: Request):
-    """O que está pedido e ainda não foi extraído — é isto que o lado GPU consulta."""
-    auth.exigir_worker(pedido)
+    """O que está pedido e ainda não foi extraído. Lido pela GPU e pela tela de Extração."""
+    auth.exigir_worker_ou_usuario(pedido, sb)
     try:
         return (sb.table("pdfs")
                 .select("id,pdf_file,total_pages,extraction_requested_at,extraction_requested_by")
