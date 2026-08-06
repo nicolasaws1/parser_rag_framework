@@ -24,6 +24,17 @@ from supabase import create_client
 
 load_dotenv()
 
+# Sem isto, faltar uma variável derruba o processo com `KeyError: 'SUPABASE_URL'`
+# — e no contêiner isso vira reinício em laço, com a causa escondida no meio de
+# um traceback. Quem sobe o servidor não escreveu este código: a mensagem tem de
+# dizer o que fazer.
+_FALTANDO = [v for v in ("SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY")
+             if not os.environ.get(v)]
+if _FALTANDO:
+    raise SystemExit(
+        "\n  Faltam variáveis de ambiente: " + ", ".join(_FALTANDO) +
+        "\n  Copie .env.example para .env e preencha (ver docs/deploy.md).\n")
+
 sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
 
 # no topo, não dentro de cada função: as guardas de acesso agora estão em quase

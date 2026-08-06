@@ -116,22 +116,55 @@ pode ficar no padrão. Nada disso impede de subir:
 docker compose up -d --build
 ```
 
-## Conferir antes de avisar que está pronto
+## Conferir
+
+**Antes de sair da sua máquina**, sem precisar de Docker:
+
+```bash
+python scripts/checar_deploy.py
+```
+
+Ele resolve as referências do compose, copia para uma pasta limpa exatamente o
+que o `Dockerfile` copia e prova que `api.main` importa só com aquilo, confere
+que toda variável lida pelo código está no `.env.example`, e que nem `.env` nem
+a chave privada escapam para a imagem ou para o repositório.
+
+**No servidor, depois do `up`:**
 
 ```bash
 curl -k https://localhost/api/health
 ```
 
-Tem de responder `{"status":"ok","supabase":"ok","worker_protegido":true}`.
+Tem de responder `{"status":"ok","supabase":"ok","worker_protegido":true}`. Se
+`worker_protegido` vier `false`, o `WORKER_TOKEN` não chegou ao contêiner.
 
-Se `worker_protegido` vier `false`, o `WORKER_TOKEN` não chegou ao contêiner.
+Os scripts de conferência estão dentro da imagem — não é preciso Python no
+host:
 
 ```bash
-python scripts/checar_rls.py          # banco fechado para a chave anon
-python scripts/testar_acesso.py       # login, leitura, escrita, cargo
+docker compose exec api python scripts/checar_tudo.py
+```
+
+Seis blocos: guardas de acesso, endpoints sem token, `X-Worker-Token`, RLS,
+acervo e órfãos.
+
+Falta um caminho que nenhum dos dois cobre, o do login de verdade. Esse pede a
+senha a quem está rodando:
+
+```bash
+docker compose exec api python scripts/testar_acesso.py --api http://localhost:8000
 ```
 
 Só depois de os três passarem é que faz sentido pedir o domínio.
+
+## Se o contêiner reiniciar em laço
+
+```bash
+docker compose logs api --tail 30
+```
+
+Faltar variável no `.env` é a causa mais provável, e a aplicação diz qual:
+`Faltam variáveis de ambiente: ...`.
 
 ## Depois que o domínio subir
 
