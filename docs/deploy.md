@@ -55,6 +55,40 @@ ordem combinada é a inversa.
 > é aberta no servidor**. Mais simples e mais seguro que abrir a 443, e o
 > `caddy` sai do compose. Vale perguntar — ele é quem conhece o padrão da casa.
 
+## Chegando pelo ZeroTier
+
+Se o servidor está numa rede ZeroTier, dá para subir e testar **sem domínio,
+sem Cloudflare e sem abrir porta nenhuma para a internet**. É o melhor jeito de
+provar que funciona antes de pedir qualquer coisa a quem administra.
+
+O detalhe que morde: o Caddy só responde para o hostname que está no `.env`.
+Com `DOMINIO=localhost`, acessar `https://10.147.20.5` de outra máquina não casa
+com nenhum site e o Caddy devolve erro. Duas saídas:
+
+```bash
+DOMINIO=10.147.20.5     # o IP ZeroTier do servidor
+```
+
+ou, para responder em qualquer nome ou IP:
+
+```bash
+DOMINIO=:443
+```
+
+O `:443` é prático enquanto se testa. Quando o domínio real entrar, troque pelo
+hostname — assim o Caddy passa a recusar acesso por outro nome, que é o que se
+quer em produção.
+
+O navegador vai avisar do certificado; é o certificado interno do Caddy, e o
+aviso é esperado. Para confirmar por linha de comando:
+
+```bash
+curl -k https://10.147.20.5/api/health
+```
+
+> Chegar pelo ZeroTier também reforça a opção do túnel `cloudflared`: se ninguém
+> precisa alcançar o servidor pela internet, não há motivo para abrir a 443.
+
 ## Passo a passo
 
 ```bash
