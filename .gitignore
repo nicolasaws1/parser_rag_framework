@@ -50,3 +50,6 @@ secrets*
 
 # ─────── Claude Code (estado transitório) ───────
 .claude/worktrees/
+
+# demo local de antes do Supabase: os dados vivem no banco agora
+front/data/

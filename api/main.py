@@ -19,7 +19,6 @@ from uuid import UUID
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from supabase import create_client
 
@@ -835,5 +834,5 @@ def index():
     return FileResponse(WEB_DIR / "index.html")
 
 
-if (WEB_DIR / "data").exists():
-    app.mount("/data", StaticFiles(directory=WEB_DIR / "data"), name="data")
+# o `/data` estático saiu junto com front/data: era a demo local de antes do
+# Supabase, e o front não referenciava nada de lá desde que passou a ler da API
