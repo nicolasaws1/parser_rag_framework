@@ -8,6 +8,14 @@
 # "Full (strict)", troque para o Caddyfile.origem quando o certificado de origem
 # chegar: é mudar CADDYFILE no .env e reiniciar, sem rebuild.
 
+# Cliente que fala com um IP não manda SNI: `https://172.28.181.92` não carrega
+# nome nenhum no ClientHello. Sem isto o Caddy não sabe qual certificado servir e
+# derruba o handshake com "tlsv1 alert internal error", mesmo tendo emitido o
+# certificado certo. Vale para curl e para navegador.
+{
+	default_sni {$DOMINIO:localhost}
+}
+
 {$DOMINIO:localhost} {
 	tls internal
 
