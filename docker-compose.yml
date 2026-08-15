@@ -43,6 +43,25 @@ services:
         condition: service_healthy
     networks: [sb100]
 
+  # Só sobe com `--profile tunel`. O servidor não tem IP público (as interfaces
+  # são todas privadas ou ZeroTier), então não há para onde um registro DNS
+  # apontar: o túnel sai de dentro para fora e resolve isso sem abrir porta.
+  #
+  # Quem administra a zona cria o túnel no Cloudflare Zero Trust, aponta o
+  # hostname público para `http://api:8000` e entrega o TUNNEL_TOKEN.
+  # Com o túnel, o caddy fica dispensável — quem termina TLS é o Cloudflare.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    profiles: [tunel]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?defina TUNNEL_TOKEN no .env}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [sb100]
+
 networks:
   sb100:
 

@@ -54,6 +54,18 @@ app = FastAPI(
 )
 
 
+@app.middleware("http")
+async def cabecalhos_de_seguranca(pedido: Request, adiante):
+    """Na aplicação, não no proxy: com o túnel do Cloudflare o caddy sai do
+    caminho, e esses cabeçalhos sumiriam junto sem ninguém notar. Aqui valem
+    em qualquer topologia — atrás do caddy, atrás do túnel ou direto."""
+    resp = await adiante(pedido)
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return resp
+
+
 def _signed(path: str) -> str | None:
     """URL temporária para um arquivo do bucket privado de imagens."""
     if not path:

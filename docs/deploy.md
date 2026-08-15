@@ -158,6 +158,38 @@ docker compose exec api python scripts/testar_acesso.py --api http://localhost:8
 
 Só depois de os três passarem é que faz sentido pedir o domínio.
 
+## Colocar num domínio (`sb100.optin.com.br`)
+
+**O servidor não tem IP público.** As interfaces são `172.26.0.10` (privada) e
+duas de ZeroTier. Um registro DNS não tem para onde apontar, então abrir a 443
+não resolve: o caminho é o **túnel `cloudflared`**.
+
+O que quem administra a zona precisa fazer, no Cloudflare Zero Trust:
+
+1. Criar um túnel (Networks → Tunnels → Create).
+2. Public hostname: `sb100.optin.com.br` → Service `HTTP` → URL `api:8000`.
+3. Entregar o **token do túnel**.
+
+Do nosso lado é uma linha no `.env` e um comando:
+
+```bash
+echo "TUNNEL_TOKEN=<o token>" >> .env
+```
+
+```bash
+sudo docker compose --profile tunel up -d
+```
+
+O `cloudflared` só sobe com esse perfil, então nada muda enquanto o token não
+existir. Com o túnel no ar, **o `caddy` fica dispensável** — quem termina TLS é
+o Cloudflare, e os cabeçalhos de segurança vivem na aplicação, não no proxy:
+
+```bash
+sudo docker compose stop caddy
+```
+
+Mantê-lo de pé também funciona e continua servindo o acesso por ZeroTier.
+
 ## O que mordeu no primeiro deploy (2026-08-15)
 
 Ficou de pé no servidor `sb100`, com Docker snap e sudo restrito a
