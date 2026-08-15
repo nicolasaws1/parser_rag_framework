@@ -92,32 +92,38 @@ def situacao() -> dict:
     disco = varrer_disco()
     banco = ler_banco()
 
+    guardados = ler_storage()
+
     est = {"aprovados": aprov, "slug_para_nome": por_slug, "disco": disco, "banco": banco,
-           "baixar": [], "registrar": [], "completos": []}
+           "storage": guardados, "baixar": [], "registrar": [], "completos": []}
     for s, nome in sorted(por_slug.items()):
-        if s not in disco:
-            est["baixar"].append((s, nome))
-        elif s not in banco:
+        if s in banco and s in guardados:
+            # já está no sistema; o arquivo local é só a área de trabalho de
+            # quem extrai. Perguntar pelo disco primeiro fazia o script rodando
+            # no servidor, que não tem a pasta, pedir para rebaixar tudo
+            est["completos"].append((s, nome))
+        elif s in disco:
             est["registrar"].append((s, nome))
         else:
-            est["completos"].append((s, nome))
+            est["baixar"].append((s, nome))
     est["extras"] = sorted(s for s in disco if s not in por_slug)
     # registro sem binário: o site abre o documento e não acha o PDF. Já
     # aconteceu com 6 dos primeiros, subidos por um script que só gravava a linha
-    guardados = ler_storage()
     est["sem_binario"] = sorted(s for s in por_slug if s in banco and s not in guardados)
-    est["storage"] = guardados
     return est
 
 
 def imprimir(est: dict) -> None:
     n = len(est["aprovados"])
     print(f"curadoria .... {n} aprovados")
-    print(f"disco ........ {len(est['disco'])} PDFs em {PASTA}")
+    if PASTA.exists():
+        print(f"disco ........ {len(est['disco'])} PDFs em {PASTA}")
+    else:
+        print(f"disco ........ pasta não existe nesta máquina ({PASTA})")
     print(f"banco ........ {len(est['banco'])} registros no Supabase")
     print(f"storage ...... {len(est['storage'])} PDFs no bucket")
     print()
-    print(f"  completos (disco + banco) .......... {len(est['completos']):>4}")
+    print(f"  completos (banco + storage) ........ {len(est['completos']):>4}")
     print(f"  no disco, falta registrar .......... {len(est['registrar']):>4}")
     print(f"  falta baixar da API ................ {len(est['baixar']):>4}")
     print(f"  {'':->38} {n:>4}")
