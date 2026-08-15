@@ -158,6 +158,29 @@ docker compose exec api python scripts/testar_acesso.py --api http://localhost:8
 
 Só depois de os três passarem é que faz sentido pedir o domínio.
 
+## O que mordeu no primeiro deploy (2026-08-15)
+
+Ficou de pé no servidor `sb100`, com Docker snap e sudo restrito a
+`/snap/bin/docker`. Três coisas surpreenderam:
+
+**Bind mount do snap funcionou.** A previsão era que o Docker snap não montasse
+arquivo de `/home/sb100/squad2` (home aninhado, e o confinamento só enxerga
+`/home/<usuário>`). Monta. Nenhuma mudança foi necessária.
+
+**TLS por IP quebra sem `default_sni`.** Cliente que acessa `https://<IP>` não
+manda SNI: o `ClientHello` chega com `server_name` vazio, o Caddy não escolhe
+certificado e derruba com `tlsv1 alert internal error` — mesmo tendo emitido o
+certificado certo, e o log dizendo `certificate obtained successfully`. Vale
+para curl e navegador. Resolvido no bloco global dos dois Caddyfiles.
+
+**`docker compose up -d` não recarrega o Caddyfile.** O arquivo é montado, então
+mudar o conteúdo não muda a definição do contêiner e o Compose deixa como está,
+informando `Running`. Depois de editar o Caddyfile:
+
+```bash
+sudo docker compose restart caddy
+```
+
 ## Se o contêiner reiniciar em laço
 
 ```bash
