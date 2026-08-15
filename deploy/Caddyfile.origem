@@ -14,9 +14,10 @@
 # Por que não Let's Encrypt: ele exige o domínio já apontando para este
 # servidor, e a ordem combinada é a inversa — o site de pé primeiro.
 
-# mesmo motivo do Caddyfile.interno: cliente que acessa por IP não manda SNI
+# mesmo motivo do Caddyfile.interno: cliente que acessa por IP não manda SNI.
+# SNI_PADRAO é um nome só; DOMINIO pode ser uma lista separada por vírgula.
 {
-	default_sni {$DOMINIO:localhost}
+	default_sni {$SNI_PADRAO:localhost}
 }
 
 {$DOMINIO:localhost} {

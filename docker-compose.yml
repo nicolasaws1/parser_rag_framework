@@ -29,7 +29,10 @@ services:
       - "80:80"
       - "443:443"
     environment:
+      # DOMINIO aceita lista ("ip, ip, dominio"); SNI_PADRAO é um nome só,
+      # usado quando o cliente não manda SNI (quem acessa por IP não manda)
       DOMINIO: ${DOMINIO:-localhost}
+      SNI_PADRAO: ${SNI_PADRAO:-localhost}
     volumes:
       # Caddyfile.interno (padrão) sobe HTTPS com certificado do próprio Caddy,
       # sem depender de ninguém. Quando o Origin Certificate chegar, troque para

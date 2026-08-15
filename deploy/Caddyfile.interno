@@ -12,8 +12,12 @@
 # nome nenhum no ClientHello. Sem isto o Caddy não sabe qual certificado servir e
 # derruba o handshake com "tlsv1 alert internal error", mesmo tendo emitido o
 # certificado certo. Vale para curl e para navegador.
+# Variável própria, e não {$DOMINIO}: o DOMINIO pode listar vários endereços
+# separados por vírgula (é assim que o Caddy atende IP e domínio ao mesmo tempo),
+# mas `default_sni` aceita UM nome. Passar a lista aqui derruba o Caddy em laço
+# de reinício, e a mensagem não aponta para a vírgula.
 {
-	default_sni {$DOMINIO:localhost}
+	default_sni {$SNI_PADRAO:localhost}
 }
 
 {$DOMINIO:localhost} {
