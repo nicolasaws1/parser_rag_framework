@@ -56,7 +56,11 @@ services:
     profiles: [tunel]
     command: tunnel --no-autoupdate run
     environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?defina TUNNEL_TOKEN no .env}
+      # `:-` e não `:?`: o Compose interpola o arquivo TODO antes de olhar os
+      # perfis, então a forma obrigatória quebrava qualquer comando enquanto o
+      # token não existisse — inclusive `up api`, com o túnel desligado.
+      # Vazio aqui só falha quando alguém liga o perfil, que é quando importa.
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     depends_on:
       api:
         condition: service_healthy

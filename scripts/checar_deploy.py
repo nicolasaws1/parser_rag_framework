@@ -70,6 +70,18 @@ def bloco_compose() -> None:
         origem = resolvido.split(":")[0]
         diz((RAIZ / origem).exists(), f"volume {origem}")
 
+    # `${VAR:?}` numa variável sem valor derruba QUALQUER comando do compose,
+    # mesmo em serviço atrás de perfil desligado: a interpolação acontece antes
+    # de os perfis serem considerados. Já quebrou `up api` uma vez.
+    bruto = (RAIZ / "docker-compose.yml").read_text(encoding="utf-8")
+    obrigatorias = re.findall(r"\$\{([A-Za-z_]+):\?", bruto)
+    ambiente = {l.split("=")[0].strip()
+                for l in (RAIZ / ".env").read_text(encoding="utf-8").splitlines()
+                if "=" in l and not l.strip().startswith("#") and l.split("=", 1)[1].strip()}
+    for v in obrigatorias:
+        diz(v in ambiente, f"${{{v}:?}} tem valor no .env",
+            "senão nenhum comando do compose roda")
+
     dockerfile = (RAIZ / "Dockerfile").read_text(encoding="utf-8")
     diz("USER " in dockerfile, "imagem não roda como root")
     diz("HEALTHCHECK" in dockerfile, "tem HEALTHCHECK")
