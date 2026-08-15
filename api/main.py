@@ -826,9 +826,22 @@ def auth_editar_eu(dados: MinhaConta, pedido: Request):
             "refazer_login": "senha" in mudou or "e-mail" in mudou}
 
 
+@app.get("/api/health/vivo", tags=["infra"])
+def health_vivo():
+    """O processo está de pé. Não fala com o Supabase — de propósito.
+
+    É esta que o HEALTHCHECK do contêiner usa. Se ela dependesse do Supabase,
+    uma indisponibilidade lá marcaria a API como doente, o `depends_on:
+    service_healthy` nunca fecharia e o caddy não subiria: o site inteiro fora
+    do ar porque o banco piscou. Estar vivo e ter tudo de que precisa são
+    perguntas diferentes, e só a primeira decide reiniciar contêiner.
+    """
+    return {"vivo": True}
+
+
 @app.get("/api/health", tags=["infra"])
 def health():
-    """Sonda de saúde: confirma que a API responde e o Supabase está acessível."""
+    """Sonda completa: a API responde E o Supabase está acessível."""
     try:
         sb.table("pdfs").select("id").limit(1).execute()
         # visível de fora de propósito: enquanto WORKER_TOKEN não estiver

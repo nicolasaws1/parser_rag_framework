@@ -22,9 +22,12 @@ USER sb100
 
 EXPOSE 8000
 
+# /api/health/vivo, não /api/health: o segundo consulta o Supabase, e o
+# contêiner não pode ser declarado doente porque um serviço externo caiu — o
+# caddy espera este healthcheck para subir, e o site sairia do ar junto
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD python -c "import urllib.request,sys; \
-        sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=8).status==200 else 1)"
+        sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health/vivo', timeout=8).status==200 else 1)"
 
 # Por variável e não por `--forwarded-allow-ips *`: o Click expande o `*` como
 # glob no Windows, o que torna o comando impossível de testar fora do contêiner.
