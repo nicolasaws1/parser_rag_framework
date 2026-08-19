@@ -18,8 +18,15 @@ services:
       WORKER_TOKEN: ${WORKER_TOKEN:?defina WORKER_TOKEN no .env}
     expose:
       - "8000"
-    # sem `ports`: a API não recebe conexão de fora do host, só do caddy.
-    # Quem termina TLS é o caddy, e é o único que publica porta.
+    ports:
+      # Publicada porque o cloudflared da casa aponta para IP físico em HTTP
+      # simples, com o TLS terminando no Cloudflare. Sem isto ele teria de
+      # falar com o caddy por HTTPS e ignorar o certificado interno, que é o
+      # oposto do padrão que os outros serviços daqui já seguem.
+      #
+      # Fica na rede interna do servidor, que não tem IP público. Todo endpoint
+      # exige login; só /api/health responde sem token.
+      - "${API_PORTA:-8000}:8000"
     networks: [sb100]
 
   caddy:

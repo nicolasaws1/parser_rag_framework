@@ -58,8 +58,11 @@ def bloco_compose() -> None:
 
     c = yaml.safe_load((RAIZ / "docker-compose.yml").read_text(encoding="utf-8"))
     diz("api" in c["services"] and "caddy" in c["services"], "serviços api e caddy")
-    diz("ports" not in c["services"]["api"],
-        "api não publica porta (só o caddy alcança)")
+    # a api publica 8000 de propósito: o cloudflared da casa aponta para IP
+    # físico em HTTP. O que não pode é ela publicar mais nada além disso.
+    portas_api = [str(x) for x in c["services"]["api"].get("ports", [])]
+    diz(all(x.endswith(":8000") for x in portas_api),
+        "api publica só a 8000", ", ".join(portas_api) or "nenhuma")
 
     for v in c["services"]["caddy"]["volumes"]:
         if not v.startswith("./"):
