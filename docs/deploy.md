@@ -20,11 +20,17 @@ Se a ordem fosse a inversa, o domínio ficaria esperando a parte difícil.
 ## O que sobe
 
 ```
-  Cloudflare ──► :443 caddy ──► api:8000 (rede interna)
+  navegador ──► Cloudflare ──► cloudflared ──► api:8010   (domínio)
+  navegador ──────────────────► caddy :443 ──► api:8000   (ZeroTier)
 ```
 
-Só o Caddy publica porta. A API fica na rede do compose, sem `ports:` — não
-aceita conexão de fora do host. Quem termina TLS é o Caddy.
+Dois caminhos, de propósito. Pelo domínio, o TLS termina no Cloudflare e o
+`cloudflared` fala HTTP com a API: é o padrão que o servidor já usa nos outros
+serviços. Pelo ZeroTier, o caddy serve HTTPS com certificado interno, o que
+mantém o acesso da equipe funcionando sem depender do domínio.
+
+Os cabeçalhos de segurança ficam na aplicação, não no caddy, porque no primeiro
+caminho ele não está no meio.
 
 ## Certificado — não espere por ele
 
@@ -202,8 +208,7 @@ http://<ip>:8000/api/health` respondia `{"detail":"Not Found"}` — resposta da
 aplicação alheia, que parece nossa. Antes de escolher a porta:
 
 ```bash
-ss -ltn | awk 'NR>1{print $4}' | grep -oE '[0-9]+$' | sort -n | uniq | tr '
-' ' '
+ss -ltn | awk 'NR>1{print $4}' | grep -oE '[0-9]+$' | sort -n | uniq
 ```
 
 Em produção ficou `API_PORTA=8010`.
