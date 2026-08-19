@@ -190,6 +190,24 @@ sudo docker compose stop caddy
 
 Mantê-lo de pé também funciona e continua servindo o acesso por ZeroTier.
 
+## A porta da API no host
+
+O `cloudflared` da casa aponta para **IP físico em HTTP**, com o TLS terminando
+no Cloudflare. Por isso a API publica uma porta (`API_PORTA`, padrão 8000) em
+vez de ficar só atrás do caddy.
+
+O servidor hospeda outras squads, e **8000 já estava ocupada** por outro
+serviço. Pior que o erro: enquanto o contêiner não subia, `curl
+http://<ip>:8000/api/health` respondia `{"detail":"Not Found"}` — resposta da
+aplicação alheia, que parece nossa. Antes de escolher a porta:
+
+```bash
+ss -ltn | awk 'NR>1{print $4}' | grep -oE '[0-9]+$' | sort -n | uniq | tr '
+' ' '
+```
+
+Em produção ficou `API_PORTA=8010`.
+
 ## O que mordeu no primeiro deploy (2026-08-15)
 
 Ficou de pé no servidor `sb100`, com Docker snap e sudo restrito a
