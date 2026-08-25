@@ -100,7 +100,8 @@ def um(pasta: Path, entrada: dict) -> str:
 
 
 def main() -> None:
-    pasta = Path(sys.argv[1] if len(sys.argv) > 1 else "/content/export")
+    padrao = Path(os.environ.get("SB100_DIR", "/content")) / "export"
+    pasta = Path(sys.argv[1]) if len(sys.argv) > 1 else padrao
     index = json.loads((pasta / "index.json").read_text(encoding="utf-8"))
     print(f"ingerindo {len(index)} documento(s) de {pasta}\n")
     ok = falhas = 0

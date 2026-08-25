@@ -4,7 +4,7 @@ Baixa do Supabase um lote de PDFs que ainda não foram extraídos. Roda no Colab
     python extractor/baixar_lote.py --quantos 10
     python extractor/baixar_lote.py --quantos 10 --menores   # começa pelos curtos
 
-Grava em /content/pdfs com o MESMO nome que o documento tem no banco, porque o
+Grava em $SB100_DIR/pdfs (padrao /content, do Colab) com o MESMO nome que o documento tem no banco, porque o
 extrator deriva o slug do nome do arquivo: se divergirem, a ingestão depois não
 acha a linha para atualizar.
 
@@ -25,7 +25,8 @@ if hasattr(sys.stdout, "reconfigure"):
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
 
-DESTINO = Path(os.environ.get("PDFS_DIR", "/content/pdfs"))
+DESTINO = Path(os.environ.get("PDFS_DIR",
+                              Path(os.environ.get("SB100_DIR", "/content")) / "pdfs"))
 
 
 def main() -> None:

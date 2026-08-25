@@ -1867,52 +1867,25 @@ function setLegFiltro(f){ legFiltro=f; if(_pgAtual) renderLegivel(_pgAtual); }
 function toggleMenu(e){ if(e) e.stopPropagation(); el("res-menu-drop").classList.toggle("on"); }
 function fecharMenu(){ var m=el("res-menu-drop"); if(m) m.classList.remove("on"); }
 document.addEventListener("click", fecharMenu);
-function _jpegSize(bin){
-  var i=2;
-  while(i<bin.length-8){
-    if(bin.charCodeAt(i)!==0xFF){ i++; continue; }
-    var mk=bin.charCodeAt(i+1);
-    if(mk>=0xC0 && mk<=0xCF && mk!==0xC4 && mk!==0xC8 && mk!==0xCC){
-      return { h:(bin.charCodeAt(i+5)<<8)|bin.charCodeAt(i+6), w:(bin.charCodeAt(i+7)<<8)|bin.charCodeAt(i+8) };
-    }
-    i += 2 + ((bin.charCodeAt(i+2)<<8)|bin.charCodeAt(i+3));
-  }
-  return {w:1000,h:1400};
-}
-function baixarPdf(){
+async function baixarPdf(){
   fecharMenu();
-  var d=IDX[docAtual], lay=DOCS[d.slug], pgs=lay.paginas||[];
-  var jpgs=[];
-  pgs.forEach(function(pp){
-    var src=pp.imgdata||"";
-    var b64=src.indexOf(",")>=0 ? src.slice(src.indexOf(",")+1) : "";
-    if(!b64) return;
-    var bin=atob(b64); var sz=_jpegSize(bin);
-    jpgs.push({bin:bin, w:sz.w, h:sz.h});
-  });
-  if(!jpgs.length){ alert("Sem páginas para gerar PDF."); return; }
-  var pdf="%PDF-1.4\n", off=[];
-  function add(s){ off.push(pdf.length); pdf+=s; }
-  var n=jpgs.length, nextId=3, pageIds=[], contIds=[], imgIds=[];
-  for(var i=0;i<n;i++){ pageIds.push(nextId++); contIds.push(nextId++); imgIds.push(nextId++); }
-  add("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
-  add("2 0 obj\n<< /Type /Pages /Count "+n+" /Kids ["+pageIds.map(function(x){return x+" 0 R";}).join(" ")+"] >>\nendobj\n");
-  for(var i=0;i<n;i++){
-    var W=jpgs[i].w, H=jpgs[i].h;
-    add(pageIds[i]+" 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 "+W+" "+H+"] /Resources << /XObject << /Im"+i+" "+imgIds[i]+" 0 R >> >> /Contents "+contIds[i]+" 0 R >>\nendobj\n");
-    var cs="q "+W+" 0 0 "+H+" 0 0 cm /Im"+i+" Do Q";
-    add(contIds[i]+" 0 obj\n<< /Length "+cs.length+" >>\nstream\n"+cs+"\nendstream\nendobj\n");
-    add(imgIds[i]+" 0 obj\n<< /Type /XObject /Subtype /Image /Width "+W+" /Height "+H+" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length "+jpgs[i].bin.length+" >>\nstream\n"+jpgs[i].bin+"\nendstream\nendobj\n");
+  /* Entrega o PDF ORIGINAL, do bucket. A versao anterior montava um PDF colando
+     as imagens de pagina (pp.imgdata), campo que existia quando o site lia
+     arquivos locais: hoje a API manda URL assinada e imgdata vem vazio, entao o
+     botao so' avisava "Sem paginas". Reconstruir tambem perdia a camada de
+     texto e inchava o arquivo. */
+  var d=IDX[docAtual];
+  try{
+    var r=await apiFetch(API+"/document/"+d.id+"/pdf");
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    var j=await r.json();
+    if(!j.url) throw new Error("sem url");
+    var a=document.createElement("a");
+    a.href=j.url; a.download=j.arquivo||(d.slug+".pdf"); a.target="_blank";
+    document.body.appendChild(a); a.click(); a.remove();
+  }catch(e){
+    alert("Nao foi possivel baixar o PDF: "+e.message);
   }
-  var total=nextId-1, xrefPos=pdf.length;
-  var xref="xref\n0 "+(total+1)+"\n0000000000 65535 f \n";
-  for(var k=0;k<total;k++){ var s=""+off[k]; while(s.length<10) s="0"+s; xref+=s+" 00000 n \n"; }
-  pdf += xref + "trailer\n<< /Size "+(total+1)+" /Root 1 0 R >>\nstartxref\n"+xrefPos+"\n%%EOF";
-  var bytes=new Uint8Array(pdf.length);
-  for(var i=0;i<pdf.length;i++) bytes[i]=pdf.charCodeAt(i)&0xff;
-  var a=document.createElement("a");
-  a.href=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));
-  a.download=d.slug+".pdf"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
 }
 var _SUPINV={'⁰':'0','¹':'1','²':'2','³':'3','⁴':'4','⁵':'5','⁶':'6','⁷':'7','⁸':'8','⁹':'9','⁺':'+','⁻':'-','⁽':'(','⁾':')','ⁿ':'n','ⁱ':'i'};
 var _SUBINV={'₀':'0','₁':'1','₂':'2','₃':'3','₄':'4','₅':'5','₆':'6','₇':'7','₈':'8','₉':'9','₊':'+','₋':'-','₍':'(','₎':')'};

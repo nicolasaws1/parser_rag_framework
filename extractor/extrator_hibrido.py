@@ -13,7 +13,10 @@ from PIL import Image
 from bs4 import BeautifulSoup
 print("GPU:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU")
 
-BASE_DIR   = Path('/content')
+# Onde os arquivos da corrida ficam. O Colab garante /content; um servidor
+# cloud, nao. Com SB100_DIR o mesmo comando roda nos dois, e o script deixa de
+# saber onde esta'.
+BASE_DIR   = Path(os.environ.get("SB100_DIR", "/content"))
 PDFS_DIR   = BASE_DIR/'pdfs'
 EXPORT_DIR = BASE_DIR/'export'
 PDFS_DIR.mkdir(parents=True, exist_ok=True); EXPORT_DIR.mkdir(parents=True, exist_ok=True)
@@ -738,8 +741,8 @@ for p in lay['paginas']:
 
 # ───── cell 9 ─────
 import shutil
-shutil.make_archive('/content/SITE_EXPORT_HIBRIDO','zip',EXPORT_DIR)
-print("📦 /content/SITE_EXPORT_HIBRIDO.zip")
+shutil.make_archive(str(BASE_DIR/'export_zip'),'zip',EXPORT_DIR)
+print(f"pacote em {BASE_DIR}/export_zip.zip")
 try:
-    from google.colab import files; files.download('/content/SITE_EXPORT_HIBRIDO.zip')
+    from google.colab import files; files.download(str(BASE_DIR/'export_zip.zip'))
 except Exception as e: print("baixe manual:", e)

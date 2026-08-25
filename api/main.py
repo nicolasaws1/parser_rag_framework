@@ -368,6 +368,28 @@ def _edicao_de(pdf_id: str) -> dict | None:
         return None            # migração 002 ainda não aplicada
 
 
+@app.get("/api/document/{pdf_id}/pdf", tags=["documentos"])
+def obter_pdf(pdf_id: str, pedido: Request):
+    """URL temporária do PDF original, do bucket `pdfs`.
+
+    O front reconstruía um PDF colando as imagens de página. Além de exigir
+    baixar todas elas, o resultado saía sem camada de texto e maior que o
+    original. Aqui devolve o arquivo que a curadoria aprovou.
+    """
+    auth.exigir_usuario(pedido, sb)
+    limitar(pedido, "leitura", pdf_id)
+    linha = sb.table("pdfs").select("pdf_file").eq("id", pdf_id).execute().data
+    if not linha:
+        raise HTTPException(404, "PDF não encontrado")
+    nome = linha[0]["pdf_file"]
+    try:
+        res = sb.storage.from_("pdfs").create_signed_url(nome, URL_TTL)
+    except Exception as e:
+        raise HTTPException(404, f"o binário não está no bucket: {e}")
+    return {"arquivo": nome,
+            "url": res.get("signedURL") or res.get("signedUrl")}
+
+
 @app.get("/api/document/{pdf_id}/edicao", tags=["edição"])
 def obter_edicao(pdf_id: str, pedido: Request):
     """Metadados da edição: se existe e quando foi feita."""
