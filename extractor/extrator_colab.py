@@ -115,7 +115,29 @@ def chandra_md(pil):
     torch.cuda.empty_cache()
     return _anti_rep(md_ or '')
 
-def classificar_figura(md_txt):
+def _fracao_branca(pil):
+    """Quanto da figura e' fundo claro. Grafico e diagrama vivem sobre branco;
+    fotografia e' tom continuo e quase nao tem branco puro."""
+    im = pil.convert('RGB').copy(); im.thumbnail((260, 260))
+    px = list(im.getdata())
+    if not px: return 1.0
+    return sum(1 for r, g, b in px if r > 235 and g > 235 and b > 235) / len(px)
+
+def classificar_figura(md_txt, pil=None):
+    """Decide entre grafico e foto.
+
+    A regra antiga olhava so' o texto que o Chandra devolveu, e tinha um vies
+    grosso: `n_num >= 8 and n_alpha >= 15` marcava GRAFICO, e qualquer descricao
+    com oito digitos passa nisso. Micrografia, gel de eletroforese, foto de
+    pomar e ate' retrato de autor entravam como grafico. Numa amostra de 102
+    figuras, 2 estavam como foto quando o correto eram 14.
+
+    Com o recorte em maos a decisao e' quase trivial: fundo branco separa os dois
+    casos. O texto so' e' consultado quando a imagem nao veio.
+    """
+    if pil is not None:
+        return 'foto' if _fracao_branca(pil) < 0.38 else 'grafico'
+
     txt = md_txt or ''
     n_num = len(re.findall(r'\d', txt)); n_alpha = len(re.findall(r'[A-Za-zÀ-ÿ]', txt))
     kw = ('eixo','axis','fig','regress','dose','kg','ha','ph','cm','mg','%')
@@ -318,7 +340,7 @@ def blocos_chandra(im_hi, regioes=None):
     # FIGURAS pelo YOLO: recorte + Chandra OCR do crop (captura equação DENTRO do gráfico) + subclasse
     for r in [r for r in (regioes or []) if r.get('tipo_rota') == 'figura']:
         mdk = chandra_md(_crop_hi(im_hi, r['bbox']))
-        blocos.append({'tipo': classificar_figura(mdk), 'bbox': [round(v,4) for v in r['bbox']],
+        blocos.append({'tipo': classificar_figura(mdk, _crop_hi(im_hi, r['bbox'])), 'bbox': [round(v,4) for v in r['bbox']],
                        'md': limpar_figura(mdk), 'conf': round(r.get('conf', 0), 3),
                        'origem': 'chandra-figura'})
     # aqui a ordenacao geometrica CONTINUA: o Chandra nao garante ordem de leitura
@@ -463,7 +485,7 @@ def blocos_docling(doc, pno, fpage, itens_pag, regioes, im_hi):
     # figuras via YOLO + Chandra (subtipo)
     for r in [r for r in regioes if r['tipo_rota']=='figura']:
         mdk=chandra_md(_crop_hi(im_hi, r['bbox']))
-        blocos.append({'tipo':classificar_figura(mdk),'bbox':[round(v,4) for v in r['bbox']],
+        blocos.append({'tipo':classificar_figura(mdk, _crop_hi(im_hi, r['bbox'])),'bbox':[round(v,4) for v in r['bbox']],
                        'md':limpar_figura(mdk),'conf':round(r['conf'],3),'origem':'chandra-figura'})
     # ordenacao por coluna: coluna esquerda inteira, depois a direita. Verificado na
     # pagina 2 do bernardi-2022 — inserir por proximidade jogava a figura (topo da
