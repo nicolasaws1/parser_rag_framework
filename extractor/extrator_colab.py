@@ -27,6 +27,25 @@ DPI_WEB, HIGH_DPI, MAX_LADO, YOLO_CONF = 150, 230, 1500, 0.40
 # inteiro assim). Contra: e' modelo de visao em toda pagina, entao e' mais lento
 # e pode alucinar onde o Docling apenas lia o texto ja' embutido no arquivo.
 SO_CHANDRA = os.environ.get("SO_CHANDRA", "0") == "1"
+
+# Lado maior da imagem entregue ao Chandra. Era 1800 fixo, o que encolhia uma A4
+# renderizada a 230 DPI (~1900x2700) e comia justamente o detalhe fino: rotulo de
+# eixo, expoente, indice de tabela. Numa L4 (22,5 GB) da' para subir. Custo: o
+# numero de tokens de imagem cresce com a area, entao dobrar o lado quadruplica
+# o tempo da pagina. 2200 e' um meio-termo medido em cima do Boletim.
+CHANDRA_MAX_LADO = int(os.environ.get("CHANDRA_MAX_LADO", "2200"))
+
+# Liberar a cache do torch a cada inferencia devolve a memoria ao driver e obriga
+# a realocar na chamada seguinte. Em GPU apertada evita estouro; com VRAM sobrando
+# e' so' custo. Ligue se aparecer out-of-memory.
+LIMPAR_VRAM = os.environ.get("LIMPAR_VRAM", "0") == "1"
+
+# Quantas paginas mandar ao Chandra numa chamada so'. 1 = comportamento de
+# sempre. Acima disso a GPU processa varias em paralelo, o que ajuda quando uma
+# sequencia sozinha nao satura a placa. Quanto ajuda depende do modelo e do
+# tamanho da imagem: MEDIR num documento antes de confiar. Cada pagina em memoria
+# custa ~15 MB, entao 8 paginas sao 120 MB dos 53 GB de RAM do sistema.
+LOTE_PAGINAS = int(os.environ.get("LOTE_PAGINAS", "1"))
 MAX_PAGINAS = None
 TEXTO_MIN_CHARS = 120
 
@@ -128,7 +147,7 @@ def chandra_md(pil):
     raw = getattr(res,'raw','') or getattr(res,'markdown','') or ''
     try: md_ = parse_markdown(raw)
     except Exception: md_ = raw
-    torch.cuda.empty_cache()
+    if LIMPAR_VRAM: torch.cuda.empty_cache()
     return _anti_rep(md_ or '')
 
 def _fracao_branca(pil):
@@ -294,14 +313,30 @@ def _abaixo(b):
     return [b[0], y, b[2], min(0.99, y+0.035)]
 
 # ── monta blocos de uma página roteada pro CHANDRA (usa data-bbox do RAW do Chandra) ──
+def chandra_raw_lote(pils):
+    """Varias paginas numa chamada. Devolve [(raw, tamanho), ...] na mesma ordem."""
+    ims = []
+    for pil in pils:
+        im = pil.convert('RGB')
+        if max(im.size) > CHANDRA_MAX_LADO:
+            e = CHANDRA_MAX_LADO/max(im.size)
+            im = im.resize((int(im.size[0]*e), int(im.size[1]*e)), Image.LANCZOS)
+        ims.append(im)
+    itens = [BatchInputItem(image=im, prompt_type='ocr_layout') for im in ims]
+    res = generate_hf(itens, chandra)
+    if LIMPAR_VRAM: torch.cuda.empty_cache()
+    return [((getattr(r, 'raw', '') or ''), im.size) for r, im in zip(res, ims)]
+
+
 def chandra_raw(pil):
     """Roda o Chandra e devolve o RAW (com <div data-bbox data-label>) + tamanho da imagem enviada."""
     im = pil.convert('RGB')
-    if max(im.size) > 1800:
-        s = 1800/max(im.size); im = im.resize((int(im.size[0]*s), int(im.size[1]*s)))
+    if max(im.size) > CHANDRA_MAX_LADO:
+        s = CHANDRA_MAX_LADO/max(im.size)
+        im = im.resize((int(im.size[0]*s), int(im.size[1]*s)), Image.LANCZOS)
     res = generate_hf([BatchInputItem(image=im, prompt_type='ocr_layout')], chandra)[0]
     raw = getattr(res, 'raw', '') or ''
-    torch.cuda.empty_cache()
+    if LIMPAR_VRAM: torch.cuda.empty_cache()
     return raw, im.size
 
 def _div_para_texto(div):
@@ -309,11 +344,11 @@ def _div_para_texto(div):
     inner = limpar_sup_sub(inner)                       # <sup>/<sub> -> unicode (+ química)
     return BeautifulSoup(inner, 'html.parser').get_text(' ', strip=True)
 
-def blocos_chandra(im_hi, regioes=None):
+def blocos_chandra(im_hi, regioes=None, raw_pronto=None):
     """Cada <div data-bbox data-label> do Chandra vira um bloco. AUTO-CALIBRA a bbox.
     O YOLO (regioes) manda na classe tabela-vs-figura: onde o YOLO diz FIGURA, o Chandra
     NÃO transforma em tabela — o recorte vai pela rota de figura (Chandra define subclasse)."""
-    raw, _ = chandra_raw(im_hi)
+    raw = raw_pronto if raw_pronto is not None else chandra_raw(im_hi)[0]
     divs = [d for d in BeautifulSoup(raw, 'html.parser').find_all('div') if d.get('data-bbox')]
     coords = []
     for d in divs:
@@ -541,6 +576,9 @@ def exportar_pdf(nome):
 
     fdoc=fitz.open(str(pdf)); N=len(fdoc); lim=N if MAX_PAGINAS is None else min(N,MAX_PAGINAS)
     paginas=[]
+    # Com LOTE_PAGINAS > 1 e so'-Chandra, o raw de um grupo de paginas e' pedido
+    # de uma vez; o laco abaixo so' consome o resultado. Com 1, nada muda.
+    _raws = {}
     for pi in range(lim):
         pno=pi+1; fpage=fdoc[pi]
         im_hi,im_web,(w,h)=render_paginas(fpage)
@@ -551,8 +589,14 @@ def exportar_pdf(nome):
         tem_texto = len(texto_cru.strip()) >= TEXTO_MIN_CHARS
         regioes=detectar_regioes(img_path, w, h)
         tem_tabela = any(r['tipo_rota']=='tabela' for r in regioes)
+        if SO_CHANDRA and LOTE_PAGINAS > 1 and pno not in _raws:
+            grupo = [q for q in range(pno, min(pno+LOTE_PAGINAS, lim+1))]
+            ims = [render_paginas(fdoc[q-1])[0] for q in grupo]
+            for q, (rw, _sz) in zip(grupo, chandra_raw_lote(ims)):
+                _raws[q] = rw
+            del ims
         if SO_CHANDRA:
-            blocos=blocos_chandra(im_hi, regioes)
+            blocos=blocos_chandra(im_hi, regioes, _raws.pop(pno, None))
             rota='chandra'; tipo_pg='escaneada' if not tem_texto else 'organica'
         elif not tem_texto:
             blocos=blocos_chandra(im_hi, regioes)         # SEM camada de texto -> OCR full-page
