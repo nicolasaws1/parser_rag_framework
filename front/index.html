@@ -1706,6 +1706,14 @@ function figLegivel(md){
 }
 
 function cropFig(pg, b){
+  /* Recorte de verdade quando existe: vem do PDF renderizado em alta, o mesmo
+     arquivo que a busca vai devolver junto do trecho. O caminho abaixo recorta
+     a imagem da pagina por CSS, que serve mas fica em ~500px de largura e nao
+     da' para ler rotulo de eixo. Ver scripts/gerar_figuras.py */
+  if(b.fig_url){
+    return '<div class="leg-fig"><img src="'+b.fig_url+'" alt="figura extraida" '
+         + 'style="max-width:100%;border:1px solid var(--borda);border-radius:6px;display:block"></div>';
+  }
   const src = pg.img_url || pg.imgdata || ('data/'+IDX[docAtual].slug+'/'+pg.img);
   const x0=b.bbox[0], y0=b.bbox[1], x1=b.bbox[2], y1=b.bbox[3];
   const fw=x1-x0, fh=y1-y0;

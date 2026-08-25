@@ -195,6 +195,12 @@ def main() -> None:
         except Exception as e:
             print(f"    ❌ ERRO em {entry['slug']}: {e}")
     print("\n🎉 Ingestão concluída.")
+    # Os recortes de figura NAO sobem aqui, de proposito. Sao gerados do PDF
+    # do bucket pela bbox do banco, em scripts/gerar_figuras.py: a pasta local
+    # `figures/` e' de corridas antigas e a numeracao dos blocos mudou entre
+    # elas, entao subir por nome de arquivo cola o recorte de uma figura no
+    # bloco de outra sem nada denunciar.
+    print("   Falta os recortes: python scripts/gerar_figuras.py --aplicar")
 
 
 if __name__ == "__main__":

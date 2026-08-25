@@ -303,6 +303,15 @@ def obter_pagina(pdf_id: str, n: int, pedido: Request):
     saida = [b.get("layout") or {"tipo": b["block_type"], "md": b["markdown_text"],
                                  "bbox": b["bbox"]} for b in blocos]
 
+    # `fig` é caminho no bucket; o navegador precisa de URL assinada. Em lote,
+    # que uma página com muitos gráficos custaria uma ida por figura.
+    caminhos = [x["fig"] for x in saida if isinstance(x, dict) and x.get("fig")]
+    if caminhos:
+        urls = _signed_lote(caminhos)
+        for x in saida:
+            if isinstance(x, dict) and x.get("fig"):
+                x["fig_url"] = urls.get(x["fig"])
+
     # a edição manual desta página, se houver, substitui o que a extração produziu
     ed = _edicao_de(pdf_id)
     if ed and ed.get("layout"):
