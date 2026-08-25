@@ -1,11 +1,13 @@
-# ── CONFIG (sem Google Drive: tudo em /content) ─────────────────────────────
+# ── EXTRATOR SÓ-CHANDRA: DocLayout-YOLO + Chandra OCR 2 ────────────────────
+# Toda página passa pelo Chandra, sem Docling. Ele lê a página renderizada, o
+# que contorna PDF com fonte sem mapeamento — foi assim que o Boletim 100
+# rodou. Para o caminho com Docling nas páginas de texto: extrator_hibrido.py
 import os, re, gc, json, time, subprocess, sys
 from pathlib import Path
 
-_PACOTES = ['chandra-ocr[hf]', 'doclayout-yolo', 'PyMuPDF', 'beautifulsoup4', 'Pillow', 'pandas', 'huggingface_hub']
-if os.environ.get("SO_CHANDRA", "0") != "1":
-    _PACOTES.insert(0, 'docling')      # ~2 min de instalacao que nao faz falta no modo so'-Chandra
-subprocess.run([sys.executable,"-m","pip","install","-q",*_PACOTES], check=False)
+subprocess.run([sys.executable,"-m","pip","install","-q",
+    *['chandra-ocr[hf]','doclayout-yolo','PyMuPDF','beautifulsoup4','Pillow','pandas','huggingface_hub']],
+    check=False)
 
 import torch, fitz
 from PIL import Image
@@ -19,14 +21,6 @@ PDFS_DIR.mkdir(parents=True, exist_ok=True); EXPORT_DIR.mkdir(parents=True, exis
 
 DPI_WEB, HIGH_DPI, MAX_LADO, YOLO_CONF = 150, 230, 1500, 0.40
 
-# Rodar TUDO no Chandra, sem Docling. Hoje o Docling pega so' as paginas com
-# camada de texto e sem tabela: 21% do acervo. As outras 79% ja' vao no Chandra.
-#
-# A favor: um extrator so', saida uniforme, e le' a pagina renderizada, o que
-# contorna PDF com fonte sem mapeamento (foi por isso que o Boletim 100 rodou
-# inteiro assim). Contra: e' modelo de visao em toda pagina, entao e' mais lento
-# e pode alucinar onde o Docling apenas lia o texto ja' embutido no arquivo.
-SO_CHANDRA = os.environ.get("SO_CHANDRA", "0") == "1"
 
 # Lado maior da imagem entregue ao Chandra. Era 1800 fixo, o que encolhia uma A4
 # renderizada a 230 DPI (~1900x2700) e comia justamente o detalhe fino: rotulo de
@@ -76,18 +70,7 @@ yolo = YOLOv10(hf_hub_download(repo_id='juliozhao/DocLayout-YOLO-DocStructBench'
 print("✅ YOLO")
 
 # ───── cell 3 ─────
-if not SO_CHANDRA:
-    from docling.datamodel.base_models import InputFormat
-    from docling.datamodel.pipeline_options import PdfPipelineOptions
-    from docling.document_converter import DocumentConverter, PdfFormatOption
-    from docling_core.types.doc import TableItem, PictureItem, DocItemLabel, CoordOrigin
-    _o = PdfPipelineOptions(); _o.do_ocr = False; _o.do_table_structure = True
-    _o.table_structure_options.do_cell_matching = True
-    docling_conv = DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=_o)})
-    print("✅ Docling")
-else:
-    docling_conv = None
-    print("Docling desligado (SO_CHANDRA=1)")
+
 
 # ───── cell 4 ─────
 from transformers import AutoModelForImageTextToText, AutoProcessor
@@ -256,14 +239,6 @@ def _regs_de_html(html):
         if any(cels): regs.append({(heads[k] if k<len(heads) else f'col{k}'):v for k,v in enumerate(cels)})
     return heads, regs
 
-def tabela_texto(titulo, heads, regs):
-    p=[titulo] if titulo else []; p.append("Tabela com colunas: "+", ".join(heads)+".")
-    idc=heads[0] if heads else ""
-    for r in regs:
-        ident=r.get(idc,""); vals=[f"{k} = {r[k]}" for k in heads[1:] if str(r.get(k,'')).strip()]
-        if ident and vals: p.append(f"{idc} {ident}: "+"; ".join(vals)+".")
-    return "\n".join(p)
-
 def tabela_resumo(titulo, heads, regs):
     idc=heads[0] if heads else ""; itens=", ".join(str(r.get(idc,"")) for r in regs[:8])
     return ((titulo+" ") if titulo else "")+f"Tabela com {len(regs)} linhas e {len(heads)} colunas ({', '.join(heads)}). {idc}: {itens}."
@@ -308,10 +283,6 @@ def limpar_sup_sub(t):
     t = re.sub(r'<sup>(.*?)</sup>', lambda m: _conv(m.group(1), _SUP), t or '', flags=re.I|re.S)
     t = re.sub(r'<sub>(.*?)</sub>', lambda m: _conv(m.group(1), _SUB), t, flags=re.I|re.S)
     return formatar_ciencia(t)
-def _abaixo(b):
-    y = min(0.95, b[3]+0.004)
-    return [b[0], y, b[2], min(0.99, y+0.035)]
-
 # ── monta blocos de uma página roteada pro CHANDRA (usa data-bbox do RAW do Chandra) ──
 def chandra_raw_lote(pils):
     """Varias paginas numa chamada. Devolve [(raw, tamanho), ...] na mesma ordem."""
@@ -436,114 +407,16 @@ def auditar_cobertura(regioes, blocos, fpage=None):
     return {'regioes_texto': n, 'cobertas': cobertas,
             'cobertura': round(cobertas/n, 3) if n else 1.0, 'regioes': regs}
 
-def _mesma_coluna(a, b, x_split=0.5):
-    return ((a[0]+a[2])/2 < x_split) == ((b[0]+b[2])/2 < x_split)
-
-def inserir_recuperado(blocos, novo):
-    """Encaixa um bloco recuperado mantendo a ordem de leitura já existente.
-
-    O Docling tem modelo de reading order — reordenar a página inteira por
-    geometria desfaz esse trabalho (numa página com duas zonas de 2 colunas
-    empilhadas, joga o Abstract para depois da Introdução). Aqui a sequência do
-    Docling é a espinha dorsal: o bloco novo entra logo após o último bloco que
-    o precede na MESMA coluna; se não houver, após o último que começa acima."""
-    bn = novo.get('bbox')
-    if not bn:
-        blocos.append(novo); return blocos
-    pos = 0
-    for i, b in enumerate(blocos):
-        bb = b.get('bbox')
-        if not bb: continue
-        if _mesma_coluna(bb, bn) and bb[1] <= bn[1]:
-            pos = i + 1
-    if pos == 0:                                  # nenhuma âncora na mesma coluna
-        for i, b in enumerate(blocos):
-            bb = b.get('bbox')
-            if bb and bb[1] <= bn[1]: pos = i + 1
-    blocos.insert(pos, novo)
-    return blocos
-
 # ── página SEM tabela: Docling (ordem) + rede de segurança PyMuPDF + figura Chandra ──
-def _norm(t): return re.sub(r'\s+',' ',(t or '')).strip().lower()
 _SHN = 20          # tamanho do trecho comparado
 _NOVO_MIN = 40     # caracteres inéditos contíguos para o bloco valer a pena
 
-def _shingles(t, n=_SHN):
-    """Conjunto de trechos sobrepostos de n caracteres (busca em O(1))."""
-    if not t: return set()
-    return {t[i:i+n] for i in range(len(t)-n+1)} if len(t) >= n else {t}
-
-def _novidade(nt, base, n=_SHN):
-    """Maior trecho CONTÍGUO do fragmento que NÃO existe no texto do Docling.
-
-    Mede o que o fragmento ACRESCENTA, em vez de quanto ele repete — a proporção
-    coberta engana: um bloco 83% coberto pode trazer 400 caracteres inéditos (deve
-    entrar), e um 50% coberto pode trazer só 24 (não deve). Medido no corpus real:
-    fragmento duplicado dá 0; parágrafo que o Docling dropou dá centenas."""
-    if len(nt) < n:
-        return 0 if nt in base else len(nt)
-    maior = atual = 0
-    for i in range(len(nt)-n+1):
-        atual = atual + 1 if nt[i:i+n] not in base else 0
-        if atual > maior: maior = atual
-    return maior + n - 1 if maior else 0
-
-def _canon(t):
-    """Forma canonica p/ comparar texto de extratores diferentes: descarta espacos,
-    pontuacao e notacao cientifica. Docling e PyMuPDF quebram o mesmo texto de formas
-    distintas ('20 u l' vs '20 ul', 'H2O2' subscrito vs ASCII) e a comparacao literal
-    deixava passar paragrafo duplicado."""
-    return re.sub(r'[^a-z0-9]', '', para_llm(t or '').lower())
 def _dentro(bn, regs, frac=0.5):
     a=max(1e-9,(bn[2]-bn[0])*(bn[3]-bn[1]))
     for r in regs:
         ix0,iy0=max(bn[0],r[0]),max(bn[1],r[1]); ix1,iy1=min(bn[2],r[2]),min(bn[3],r[3])
         if max(0,ix1-ix0)*max(0,iy1-iy0)/a>=frac: return True
     return False
-def _norm_bbox(prov, pw, ph):
-    bb=prov.bbox
-    try:
-        if bb.coord_origin==CoordOrigin.BOTTOMLEFT: top,bot=ph-max(bb.t,bb.b),ph-min(bb.t,bb.b)
-        else: top,bot=min(bb.t,bb.b),max(bb.t,bb.b)
-    except Exception: top,bot=min(bb.t,bb.b),max(bb.t,bb.b)
-    l,r=min(bb.l,bb.r),max(bb.l,bb.r)
-    return [round(l/pw,4),round(top/ph,4),round(r/pw,4),round(bot/ph,4)]
-
-def blocos_docling(doc, pno, fpage, itens_pag, regioes, im_hi):
-    try: ps=doc.pages[pno].size; pw,ph=ps.width,ps.height
-    except Exception: pw,ph=fpage.rect.width,fpage.rect.height
-    blocos=[]
-    for it in itens_pag:
-        if isinstance(it, (TableItem,)): continue   # (não deveria haver tabela aqui)
-        if isinstance(it, PictureItem): continue     # figura tratada via YOLO+Chandra abaixo
-        t=(getattr(it,'text','') or '').strip()
-        if not t: continue
-        tipo='formula' if getattr(it,'label',None)==DocItemLabel.FORMULA else 'texto'
-        blocos.append({'tipo':tipo,'bbox':_norm_bbox(it.prov[0],pw,ph),'md':limpar_sup_sub(t),
-                       'origem':'docling'})
-    # rede de segurança PyMuPDF (dedup robusto: compara com o TEXTO CONCATENADO do Docling,
-    # pegando o caso em que o Docling fatiou o mesmo parágrafo em vários itens -> evita duplicata)
-    base=_shingles(_canon(" ".join(b.get('md','') for b in blocos)))
-    pfw,pfh=fpage.rect.width,fpage.rect.height
-    for pb in fpage.get_text('blocks'):
-        x0,y0,x1,y1,txt=pb[0],pb[1],pb[2],pb[3],pb[4]; t=(txt or '').strip()
-        nt=_canon(t)
-        if len(nt)<12: continue
-        if _novidade(nt, base) < _NOVO_MIN: continue    # não acrescenta nada -> não duplica
-        bn=[round(x0/pfw,4),round(y0/pfh,4),round(x1/pfw,4),round(y1/pfh,4)]
-        blocos.append({'tipo':'texto','bbox':bn,'md':limpar_sup_sub(t),
-                       'origem':'pymupdf'}); base|=_shingles(nt)
-    # figuras via YOLO + Chandra (subtipo)
-    for r in [r for r in regioes if r['tipo_rota']=='figura']:
-        mdk=chandra_md(_crop_hi(im_hi, r['bbox']))
-        blocos.append({'tipo':classificar_figura(mdk, _crop_hi(im_hi, r['bbox'])),'bbox':[round(v,4) for v in r['bbox']],
-                       'md':limpar_figura(mdk),'conf':round(r['conf'],3),'origem':'chandra-figura'})
-    # ordenacao por coluna: coluna esquerda inteira, depois a direita. Verificado na
-    # pagina 2 do bernardi-2022 — inserir por proximidade jogava a figura (topo da
-    # coluna direita) para antes do texto da esquerda, quebrando a leitura.
-    blocos = ordenar_regioes(blocos)
-    return blocos
-
 # ── MD p/ o vetor (document.md): super/subscritos unicode -> LaTeX (LOSSLESS, LLM-friendly) ──
 _SUP_INV = {'⁰':'0','¹':'1','²':'2','³':'3','⁴':'4','⁵':'5','⁶':'6','⁷':'7','⁸':'8','⁹':'9','⁺':'+','⁻':'-','⁽':'(','⁾':')','ⁿ':'n','ⁱ':'i'}
 _SUB_INV = {'₀':'0','₁':'1','₂':'2','₃':'3','₄':'4','₅':'5','₆':'6','₇':'7','₈':'8','₉':'9','₊':'+','₋':'-','₍':'(','₎':')'}
@@ -567,17 +440,13 @@ def slugify(n): return re.sub(r'[^a-z0-9]+','-',Path(n).stem.lower()).strip('-')
 def exportar_pdf(nome):
     _t0=time.time()
     pdf=PDFS_DIR/nome; slug=slugify(nome); out=EXPORT_DIR/slug; (out/'pages').mkdir(parents=True,exist_ok=True)
-    print(f"\n=== {nome} -> {slug}/  (Docling convertendo...)")
-    doc = docling_conv.convert(str(pdf)).document
-    itens_pag={}
-    for it,_ in doc.iterate_items():
-        pv=getattr(it,'prov',None)
-        if pv: itens_pag.setdefault(pv[0].page_no,[]).append(it)
+    print()
+    print(f"=== {nome} -> {slug}/")
 
     fdoc=fitz.open(str(pdf)); N=len(fdoc); lim=N if MAX_PAGINAS is None else min(N,MAX_PAGINAS)
     paginas=[]
-    # Com LOTE_PAGINAS > 1 e so'-Chandra, o raw de um grupo de paginas e' pedido
-    # de uma vez; o laco abaixo so' consome o resultado. Com 1, nada muda.
+    # Com LOTE_PAGINAS > 1 o raw de um grupo de paginas e' pedido de uma vez; o
+    # laco abaixo so' consome o resultado. Com 1, e' uma chamada por pagina.
     _raws = {}
     for pi in range(lim):
         pno=pi+1; fpage=fdoc[pi]
@@ -589,24 +458,12 @@ def exportar_pdf(nome):
         tem_texto = len(texto_cru.strip()) >= TEXTO_MIN_CHARS
         regioes=detectar_regioes(img_path, w, h)
         tem_tabela = any(r['tipo_rota']=='tabela' for r in regioes)
-        if SO_CHANDRA and LOTE_PAGINAS > 1 and pno not in _raws:
+        if LOTE_PAGINAS > 1 and pno not in _raws:
             grupo = [q for q in range(pno, min(pno+LOTE_PAGINAS, lim+1))]
-            ims = [render_paginas(fdoc[q-1])[0] for q in grupo]
-            for q, (rw, _sz) in zip(grupo, chandra_raw_lote(ims)):
+            for q, (rw, _sz) in zip(grupo, chandra_raw_lote([render_paginas(fdoc[q-1])[0] for q in grupo])):
                 _raws[q] = rw
-            del ims
-        if SO_CHANDRA:
-            blocos=blocos_chandra(im_hi, regioes, _raws.pop(pno, None))
-            rota='chandra'; tipo_pg='escaneada' if not tem_texto else 'organica'
-        elif not tem_texto:
-            blocos=blocos_chandra(im_hi, regioes)         # SEM camada de texto -> OCR full-page
-            rota='chandra'; tipo_pg='escaneada'
-        elif tem_tabela:
-            blocos=blocos_chandra(im_hi, regioes)         # Chandra full-page + data-bbox; YOLO manda em tabela-vs-figura
-            rota='chandra'; tipo_pg='organica'
-        else:
-            blocos=blocos_docling(doc, pno, fpage, itens_pag.get(pno,[]), regioes, im_hi)
-            rota='docling'; tipo_pg='organica'
+        blocos = blocos_chandra(im_hi, regioes, _raws.pop(pno, None))
+        rota = 'chandra'; tipo_pg = 'escaneada' if not tem_texto else 'organica'
         for j,b in enumerate(blocos): b['id']=f'p{pno}-b{j}'
         # salva recortes de figuras/gráficos p/ recuperação posterior na busca
         for b in blocos:
