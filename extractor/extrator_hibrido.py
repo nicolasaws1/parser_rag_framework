@@ -546,10 +546,66 @@ def para_llm(t):
 print("✅ Funções prontas.")
 
 # ───── cell 7 ─────
+
+# -- quanto da GPU esta' realmente sendo usada -------------------------------
+# Memoria ocupada nao diz nada sobre isso: o modelo pode estar a 95% de calculo
+# com a memoria parada. E' a utilizacao que decide se aumentar a batelada rende.
+import threading
+
+
+class _Medidor:
+    """Amostra a utilizacao da GPU numa thread, a cada 2 s."""
+
+    def __init__(self):
+        self.amostras = []
+        self._parar = threading.Event()
+        self._t = None
+
+    def _laco(self):
+        while not self._parar.wait(2.0):
+            try:
+                self.amostras.append(torch.cuda.utilization())
+            except Exception:
+                pass
+
+    def comecar(self):
+        try:
+            torch.cuda.reset_peak_memory_stats()
+        except Exception:
+            pass
+        self.amostras.clear()
+        self._parar.clear()
+        self._t = threading.Thread(target=self._laco, daemon=True)
+        self._t.start()
+
+    def parar(self):
+        self._parar.set()
+        if self._t:
+            self._t.join(timeout=3)
+        try:
+            pico = torch.cuda.max_memory_allocated() / 2**30
+            total = torch.cuda.get_device_properties(0).total_memory / 2**30
+        except Exception:
+            return "medicao indisponivel"
+        if not self.amostras:
+            return f"pico de VRAM {pico:.1f} GB de {total:.1f} GB"
+        media = sum(self.amostras) / len(self.amostras)
+        if media >= 85:
+            veredito = "placa saturada; subir LOTE_PAGINAS rende pouco"
+        elif media >= 60:
+            veredito = "alguma folga; LOTE_PAGINAS=2 pode ajudar"
+        else:
+            veredito = "muita folga de calculo; teste LOTE_PAGINAS=4"
+        return (f"GPU {media:.0f}% media, {max(self.amostras)}% pico | "
+                f"VRAM {pico:.1f} de {total:.1f} GB | {veredito}")
+
+
+_medidor = _Medidor()
+
 def slugify(n): return re.sub(r'[^a-z0-9]+','-',Path(n).stem.lower()).strip('-')[:60]
 
 def exportar_pdf(nome):
-    _t0=time.time()
+    _t0=time.time(); _medidor.comecar()
     pdf=PDFS_DIR/nome; slug=slugify(nome); out=EXPORT_DIR/slug; (out/'pages').mkdir(parents=True,exist_ok=True)
     print(f"\n=== {nome} -> {slug}/  (Docling convertendo...)")
     doc = docling_conv.convert(str(pdf)).document
@@ -623,6 +679,7 @@ def exportar_pdf(nome):
         for b in p['blocos']: linhas.append(para_llm(b['md'])); linhas.append("")   # ASCII p/ o LLM/vetor
     (out/'document.md').write_text("\n".join(linhas),encoding='utf-8')
     print(f"  ✅ {slug} | resumo={resumo}")
+    print("     " + _medidor.parar())
     return layout
 
 # ═══ LOOP RETOMÁVEL ═══
