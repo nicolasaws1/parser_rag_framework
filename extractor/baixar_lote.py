@@ -52,6 +52,20 @@ def main() -> None:
     if not a.menores and not a.doc:
         pend.sort(key=lambda d: not d.get("extraction_requested_at"))
 
+    if a.quantos <= 0:                     # relatório, para olhar antes de baixar
+        paginas = sum(d.get("total_pages") or 0 for d in pend)
+        na_fila = sum(1 for d in pend if d.get("extraction_requested_at"))
+        print(f"faltam extrair: {len(pend)} documentos, {paginas} páginas")
+        print(f"   pedidos pelo site: {na_fila}")
+        print(f"   a ~17 s/página, o acervo todo dá {paginas*17/3600:.1f} h de GPU")
+        print()
+        for d in pend[:8]:
+            marca = "*" if d.get("extraction_requested_at") else " "
+            print(f"   {marca} {(d.get('total_pages') or 0):>4} pág  {d['pdf_file'][:52]}")
+        if len(pend) > 8:
+            print(f"     ... e outros {len(pend)-8}")
+        return
+
     lote = pend[: a.quantos]
     DESTINO.mkdir(parents=True, exist_ok=True)
     print(f"pendentes: {len(pend)} | baixando {len(lote)} para {DESTINO}\n")
