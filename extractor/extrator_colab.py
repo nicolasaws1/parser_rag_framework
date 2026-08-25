@@ -2,7 +2,10 @@
 import os, re, gc, json, time, subprocess, sys
 from pathlib import Path
 
-subprocess.run([sys.executable,"-m","pip","install","-q",*['docling', 'chandra-ocr[hf]', 'doclayout-yolo', 'PyMuPDF', 'beautifulsoup4', 'Pillow', 'pandas', 'huggingface_hub']], check=False)
+_PACOTES = ['chandra-ocr[hf]', 'doclayout-yolo', 'PyMuPDF', 'beautifulsoup4', 'Pillow', 'pandas', 'huggingface_hub']
+if os.environ.get("SO_CHANDRA", "0") != "1":
+    _PACOTES.insert(0, 'docling')      # ~2 min de instalacao que nao faz falta no modo so'-Chandra
+subprocess.run([sys.executable,"-m","pip","install","-q",*_PACOTES], check=False)
 
 import torch, fitz
 from PIL import Image
@@ -15,6 +18,15 @@ EXPORT_DIR = BASE_DIR/'export'
 PDFS_DIR.mkdir(parents=True, exist_ok=True); EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 DPI_WEB, HIGH_DPI, MAX_LADO, YOLO_CONF = 150, 230, 1500, 0.40
+
+# Rodar TUDO no Chandra, sem Docling. Hoje o Docling pega so' as paginas com
+# camada de texto e sem tabela: 21% do acervo. As outras 79% ja' vao no Chandra.
+#
+# A favor: um extrator so', saida uniforme, e le' a pagina renderizada, o que
+# contorna PDF com fonte sem mapeamento (foi por isso que o Boletim 100 rodou
+# inteiro assim). Contra: e' modelo de visao em toda pagina, entao e' mais lento
+# e pode alucinar onde o Docling apenas lia o texto ja' embutido no arquivo.
+SO_CHANDRA = os.environ.get("SO_CHANDRA", "0") == "1"
 MAX_PAGINAS = None
 TEXTO_MIN_CHARS = 120
 
@@ -45,14 +57,18 @@ yolo = YOLOv10(hf_hub_download(repo_id='juliozhao/DocLayout-YOLO-DocStructBench'
 print("✅ YOLO")
 
 # ───── cell 3 ─────
-from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions
-from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling_core.types.doc import TableItem, PictureItem, DocItemLabel, CoordOrigin
-_o = PdfPipelineOptions(); _o.do_ocr = False; _o.do_table_structure = True
-_o.table_structure_options.do_cell_matching = True
-docling_conv = DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=_o)})
-print("✅ Docling")
+if not SO_CHANDRA:
+    from docling.datamodel.base_models import InputFormat
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+    from docling_core.types.doc import TableItem, PictureItem, DocItemLabel, CoordOrigin
+    _o = PdfPipelineOptions(); _o.do_ocr = False; _o.do_table_structure = True
+    _o.table_structure_options.do_cell_matching = True
+    docling_conv = DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=_o)})
+    print("✅ Docling")
+else:
+    docling_conv = None
+    print("Docling desligado (SO_CHANDRA=1)")
 
 # ───── cell 4 ─────
 from transformers import AutoModelForImageTextToText, AutoProcessor
@@ -535,7 +551,10 @@ def exportar_pdf(nome):
         tem_texto = len(texto_cru.strip()) >= TEXTO_MIN_CHARS
         regioes=detectar_regioes(img_path, w, h)
         tem_tabela = any(r['tipo_rota']=='tabela' for r in regioes)
-        if not tem_texto:
+        if SO_CHANDRA:
+            blocos=blocos_chandra(im_hi, regioes)
+            rota='chandra'; tipo_pg='escaneada' if not tem_texto else 'organica'
+        elif not tem_texto:
             blocos=blocos_chandra(im_hi, regioes)         # SEM camada de texto -> OCR full-page
             rota='chandra'; tipo_pg='escaneada'
         elif tem_tabela:
