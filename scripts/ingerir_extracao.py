@@ -43,17 +43,36 @@ def _limpar(v):
     return v
 
 
+def achar_documento(slug: str) -> str:
+    """id do documento a partir do slug do extrator.
+
+    O nome no banco vem do `slug_de` da curadoria, que corta em 60 caracteres e
+    as vezes deixa um traco no fim. O `slugify` do extrator faz `.strip('-')` e
+    devolve um nome sem ele: cinco dos 230 documentos divergem por esse traco, e
+    a busca exata nao acha nenhum deles.
+    """
+    exato = sb.table("pdfs").select("id").eq("pdf_file", f"{slug}.pdf").execute().data
+    if exato:
+        return exato[0]["id"]
+    # tolera traco sobrando ou faltando no fim, dos dois lados
+    cand = (sb.table("pdfs").select("id,pdf_file")
+            .ilike("pdf_file", f"{slug}%").execute().data)
+    alvo = slug.rstrip("-")
+    iguais = [c for c in cand if c["pdf_file"].removesuffix(".pdf").rstrip("-") == alvo]
+    if len(iguais) == 1:
+        return iguais[0]["id"]
+    if len(iguais) > 1:
+        raise ValueError(f"{slug}: {len(iguais)} documentos batem, ambíguo")
+    raise ValueError(f"{slug}: não existe no banco. Registre antes com acervo.py")
+
+
 def um(pasta: Path, entrada: dict) -> str:
     slug = entrada["slug"]
     lay = json.loads((pasta / slug / "layout.json").read_text(encoding="utf-8"))
     md = (pasta / slug / "document.md").read_text(encoding="utf-8")
     paginas = lay.get("paginas", [])
-    pdf_file = f"{slug}.pdf"
 
-    linha = sb.table("pdfs").select("id").eq("pdf_file", pdf_file).execute().data
-    if not linha:
-        return f"{slug}: não existe no banco. Registre antes com acervo.py"
-    pdf_id = linha[0]["id"]
+    pdf_id = achar_documento(slug)
 
     agora = datetime.now().isoformat(timespec="seconds")
     sb.table("pdfs").update({
