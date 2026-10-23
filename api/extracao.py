@@ -74,6 +74,97 @@ def achar_documento(sb, slug: str) -> str:
     raise ValueError("não está no acervo; sincronize a curadoria antes")
 
 
+# ───────────────────────── lote de ida ──────────────────────────────────────
+# O computador com GPU não precisa de chave nenhuma do banco: baixa um lote pelo
+# site, extrai, e devolve o zip pelo site. O lote leva os PDFs, os metadados da
+# curadoria e um `lote.json` com o pdf_id de cada arquivo, que volta junto no zip
+# de resposta. É por esse id que a volta casa — não pelo nome do arquivo, que o
+# extrator reescreve (o slugify tira o traço final, e um documento já se perdeu
+# assim).
+
+import re
+import uuid
+
+MAX_LOTE = 50
+
+
+def slugify(nome: str) -> str:
+    """O MESMO do extrator. Se divergir, o lote.json deixa de casar."""
+    return re.sub(r"[^a-z0-9]+", "-", Path(nome).stem.lower()).strip("-")[:60]
+
+
+# chaves que o extrator procura em metadados_api.json (meta_do)
+_META = {"title": "Título", "authors": "Autor(es)", "year": "Ano",
+         "journal": "Título do periódico", "volume": "Volume", "doi": "DOI",
+         "category": "CATEGORIA", "document_type": "Tipo de documento",
+         "keywords": "Palavras-chave"}
+
+
+def escolher_lote(sb, quantos: int, menores: bool = True,
+                  ids: list[str] | None = None) -> list[dict]:
+    """Documentos ainda não extraídos. Os pedidos pelo botão Analisar vêm antes."""
+    try:
+        cand = (sb.table("pdfs")
+                .select("id,pdf_file,total_pages,extraction_requested_at")
+                .eq("extracted", False).execute().data)
+    except Exception:
+        cand = (sb.table("pdfs").select("id,pdf_file,total_pages")
+                .eq("extracted", False).execute().data)
+    if ids:
+        quer = set(ids)
+        cand = [c for c in cand if c["id"] in quer]
+    cand.sort(key=lambda d: (not d.get("extraction_requested_at"),
+                             (d.get("total_pages") or 10**6) if menores else 0))
+    return cand[: max(1, min(quantos, MAX_LOTE))]
+
+
+def montar_lote(sb, docs: list[dict], quem: str) -> tuple[bytes, dict]:
+    """zip com pdfs/, metadados_api.json e lote.json. Devolve (bytes, resumo)."""
+    ids = [d["id"] for d in docs]
+    metas = {m["pdf_id"]: m for m in
+             sb.table("article_metadata").select("*").in_("pdf_id", ids).execute().data}
+
+    lote_id = datetime.now().strftime("%Y%m%d-%H%M") + "-" + uuid.uuid4().hex[:6]
+    manifesto = {"lote": lote_id, "criado_em": datetime.now().isoformat(timespec="seconds"),
+                 "criado_por": quem, "documentos": []}
+    meta_extrator: dict[str, dict] = {}
+    buf = io.BytesIO()
+    faltaram = []
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for d in docs:
+            try:
+                dados = sb.storage.from_("pdfs").download(d["pdf_file"])
+            except Exception:
+                faltaram.append(d["pdf_file"]); continue
+            z.writestr(f"pdfs/{d['pdf_file']}", dados)
+            m = metas.get(d["id"], {})
+            meta_extrator[d["pdf_file"]] = {v: m.get(k) for k, v in _META.items() if m.get(k)}
+            manifesto["documentos"].append({
+                "pdf_id": d["id"], "arquivo": d["pdf_file"],
+                "slug": slugify(d["pdf_file"]), "paginas": d.get("total_pages"),
+                "titulo": m.get("title"), "autores": m.get("authors"),
+                "ano": m.get("year"), "doi": m.get("doi"), "categoria": m.get("category"),
+            })
+        z.writestr("metadados_api.json", json.dumps(meta_extrator, ensure_ascii=False, indent=1))
+        z.writestr("lote.json", json.dumps(manifesto, ensure_ascii=False, indent=1))
+    return buf.getvalue(), {"lote": lote_id, "documentos": len(manifesto["documentos"]),
+                            "paginas": sum(x["paginas"] or 0 for x in manifesto["documentos"]),
+                            "sem_binario": faltaram}
+
+
+def _mapa_do_lote(pasta: Path) -> dict[str, str]:
+    """slug -> pdf_id, se o pacote de volta trouxer o lote.json."""
+    f = pasta / "lote.json"
+    if not f.exists():
+        return {}
+    try:
+        man = json.loads(f.read_text(encoding="utf-8"))
+        return {x["slug"]: x["pdf_id"] for x in man.get("documentos", [])
+                if x.get("slug") and x.get("pdf_id")}
+    except Exception:
+        return {}
+
+
 # ───────────────────────────── conferir ─────────────────────────────────────
 
 ARQUIVOS_OBRIGATORIOS = ("layout.json", "document.md")
@@ -94,6 +185,7 @@ def conferir(sb, pasta: Path) -> list[dict]:
     if not isinstance(entradas, list) or not entradas:
         raise ValueError("index.json vazio")
 
+    mapa = _mapa_do_lote(pasta)
     fora = []
     for e in entradas:
         slug = (e or {}).get("slug")
@@ -107,14 +199,20 @@ def conferir(sb, pasta: Path) -> list[dict]:
             item.update(situacao="invalido", motivo=f"falta {', '.join(faltando)}")
             fora.append(item); continue
 
-        try:
-            pdf_id = achar_documento(sb, slug)
-        except ValueError as err:
-            item.update(situacao="desconhecido", motivo=str(err))
-            fora.append(item); continue
+        pdf_id = mapa.get(slug)
+        if not pdf_id:
+            try:
+                pdf_id = achar_documento(sb, slug)
+            except ValueError as err:
+                item.update(situacao="desconhecido", motivo=str(err))
+                fora.append(item); continue
 
-        linha = (sb.table("pdfs").select("pdf_file,extracted,extracted_at")
-                 .eq("id", pdf_id).execute().data)[0]
+        achado = (sb.table("pdfs").select("pdf_file,extracted,extracted_at")
+                  .eq("id", pdf_id).execute().data)
+        if not achado:
+            item.update(situacao="desconhecido", motivo="o documento do lote saiu do acervo")
+            fora.append(item); continue
+        linha = achado[0]
         item["pdf_id"] = pdf_id
         item["arquivo"] = linha["pdf_file"]
         if linha.get("extracted"):

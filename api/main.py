@@ -620,7 +620,7 @@ def worker_estado(pedido: Request):
 # páginas e blocos de uma extração que pode ter sido curada à mão.
 
 NOTEBOOK_URL = ("https://raw.githubusercontent.com/nicolasaws1/parser_rag_framework/"
-                "main/extractor/colab_chandra.ipynb")
+                "main/extractor/extrator_lote.ipynb")
 
 
 @app.get("/api/extracao/notebook", tags=["extração"])
@@ -648,6 +648,34 @@ def _receber_pacote(arquivo: UploadFile) -> bytes:
     return dados
 
 
+@app.get("/api/extracao/lote", tags=["extração"])
+def extracao_lote(pedido: Request, quantos: int = 5, menores: bool = True,
+                  ids: str | None = None):
+    """Zip com os PDFs ainda não extraídos e os metadados, para levar à GPU.
+
+    O computador que extrai não recebe chave nenhuma do banco: baixa isto, roda
+    `extractor/rodar_lote.py`, e devolve o resultado pelo upload desta aba.
+    """
+    quem = auth.exigir_cargo(pedido, sb, "admin", "curador")
+    limitar(pedido, "leitura", "lote-extracao")
+    from fastapi.responses import Response
+    from api import extracao
+    lista = [x for x in (ids or "").split(",") if x.strip()] or None
+    docs = extracao.escolher_lote(sb, quantos, menores, lista)
+    if not docs:
+        raise HTTPException(404, "não há documento pendente de extração")
+    dados, resumo = extracao.montar_lote(sb, docs, quem["email"])
+    registrar("extracao_solicitada", quem["email"], None,
+              {"lote": resumo["lote"], "documentos": resumo["documentos"],
+               "paginas": resumo["paginas"], "origem": "download de lote"},
+              pedido.client.host if pedido.client else None)
+    return Response(dados, media_type="application/zip", headers={
+        "Content-Disposition": f'attachment; filename="lote_{resumo["lote"]}.zip"',
+        "X-Lote-Documentos": str(resumo["documentos"]),
+        "X-Lote-Paginas": str(resumo["paginas"]),
+        "Access-Control-Expose-Headers": "X-Lote-Documentos, X-Lote-Paginas"})
+
+
 @app.get("/api/extracao/notebook.ipynb", tags=["extração"])
 def extracao_notebook_arquivo(pedido: Request):
     """O notebook do Chandra, como download.
@@ -667,7 +695,7 @@ def extracao_notebook_arquivo(pedido: Request):
         raise HTTPException(502, f"não deu para buscar o notebook no GitHub: {e}")
     return Response(r.content, media_type="application/x-ipynb+json",
                     headers={"Content-Disposition":
-                             'attachment; filename="colab_chandra.ipynb"'})
+                             'attachment; filename="extrator_lote.ipynb"'})
 
 
 @app.post("/api/extracao/conferir", tags=["extração"])

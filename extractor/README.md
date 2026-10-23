@@ -1,4 +1,4 @@
-# Extrair PDFs no Colab com o Chandra OCR 2
+# Extrair PDFs com o Chandra OCR 2
 
 Guia do [`colab_chandra.ipynb`](colab_chandra.ipynb): toda página passa pelo
 Chandra, sem Docling.
@@ -90,30 +90,53 @@ diverge da curadoria.
 marcado como extraído mas não tem imagens de página. Sobra de alguma corrida
 interrompida; re-extrair resolve.
 
-## Enviar pelo site em vez da célula 5
+## Pelo site, sem chave do banco (recomendado)
 
-Na aba **Extração** do site há o painel *Enviar extração pronta*, com o mesmo
-passo a passo e um botão que baixa este notebook.
+O computador com GPU, seja o Colab ou um servidor na nuvem, **não precisa do
+`.env`**. Tudo passa pela aba **Extração** do site:
 
-1. Rode as células 1 a 4.
-2. **Pule a 5** e rode a 7: ela baixa `extracao_chandra.zip`.
-3. Na aba Extração, arraste o zip para o painel.
-4. O site **confere antes de gravar** e mostra uma tabela:
+```
+site --lote_....zip--> GPU --rodar_lote.py--> extracao_....zip --upload--> site --> banco
+```
+
+1. **Baixe um lote** na aba Extração. Escolha quantos documentos; os pedidos pelo
+   botão Analisar vêm primeiro, depois os menores. O zip leva os PDFs, os
+   metadados da curadoria e um `lote.json` com o id de cada documento no banco.
+2. **Baixe o notebook** [`extrator_lote.ipynb`](extrator_lote.ipynb) pelo mesmo
+   painel e abra no Colab (com GPU) ou no Jupyter do servidor. Sem Jupyter:
+
+   ```bash
+   python extractor/rodar_lote.py lote_....zip
+   ```
+
+   Com `--hibrido` usa o Docling nas páginas de texto.
+3. **Rode** até sair o `extracao_....zip`.
+4. **Envie** esse zip no painel. O site confere antes de gravar:
 
 | situação | o que acontece |
 |---|---|
-| novo | é gravado |
-| já extraído | pulado; só regrava se você marcar *Substituir* |
-| fora do acervo | recusado; sincronize a curadoria antes |
+| novo | é gravado e aparece na Home como extraído |
+| já extraído | pulado; só regrava se você marcar a opção, com confirmação |
+| fora do acervo | recusado |
 | inválido | recusado; falta `layout.json` ou `document.md` |
 
-5. Clique em **Gravar no banco**.
+O resultado **casa pelo id do `lote.json`**, não pelo nome do arquivo. O extrator
+reescreve o nome (tira o traço final), e foi assim que um documento se perdeu na
+rodada de 26/08. Testado em 23/10 justamente com ele: casou e gravou.
 
-Só `.zip` é aceito, e o conteúdo é conferido além da extensão: um PDF renomeado
-para `.zip` é recusado. O limite é de 600 MB por pacote.
+Só `.zip` é aceito, e o conteúdo é conferido além da extensão: PDF renomeado para
+`.zip` é recusado, e zip com caminho `../` também. Limite de 600 MB por pacote.
+Só `admin` e `curador` veem o painel.
 
-A lógica é a mesma da célula 5 (`api/extracao.py`), então os dois caminhos dão o
-mesmo resultado. Só `admin` e `curador` enxergam o painel.
+Cada lote extrai na sua própria pasta (`lote_<id>/`). Se a sessão cair, rode de
+novo com o mesmo zip: o que já terminou é pulado.
+
+### O caminho antigo, com `.env`
+
+O [`colab_chandra.ipynb`](colab_chandra.ipynb) continua funcionando: baixa os PDFs
+direto do Supabase e grava direto no banco na célula 5. Precisa das chaves.
+A gravação é a mesma do upload (`api/extracao.py`), com a mesma checagem de
+duplicata.
 
 ## O que acontece com o resultado
 

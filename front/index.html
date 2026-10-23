@@ -584,21 +584,34 @@
       </div>
     </div>
     <div class="up-card" id="up-card">
-      <h3>Enviar extração pronta</h3>
-      <div class="up-sub">Alternativa à célula 5 do notebook. Em vez de o Colab gravar direto no banco, você
-        baixa o <b>.zip</b> da extração e manda aqui. O site confere o pacote inteiro antes de gravar:
-        documento que já foi extraído não é sobrescrito sem você pedir.</div>
+      <h3>Extrair fora daqui</h3>
+      <div class="up-sub">O computador com GPU (Colab ou um servidor na nuvem) não precisa de chave nenhuma do
+        banco: ele recebe um lote por aqui e devolve o resultado por aqui. O site confere o pacote inteiro antes de
+        gravar, e documento que já foi extraído não é sobrescrito sem você pedir.</div>
       <div class="up-passos">
-        <div class="up-passo"><b>1. BAIXE O NOTEBOOK</b>
-          <button class="up-btn sec" onclick="baixarNotebook()" style="margin-top:6px">
+        <div class="up-passo"><b>1. BAIXE UM LOTE</b>
+          PDFs ainda não extraídos, com os metadados da curadoria.
+          <div style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap">
+            <input id="lote-qtd" type="number" min="1" max="50" value="5"
+                   style="width:58px;padding:5px 6px;border:1px solid var(--borda);border-radius:7px;font-family:inherit;font-size:12.5px">
+            <label style="display:flex;align-items:center;gap:4px;font-size:11.5px;cursor:pointer">
+              <input type="checkbox" id="lote-menores" checked> menores antes</label>
+          </div>
+          <button class="up-btn" id="btn-lote" onclick="baixarLote()" style="margin-top:8px">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            colab_chandra.ipynb</button></div>
-        <div class="up-passo"><b>2. ABRA NO COLAB COM GPU</b>
-          Arquivo &rarr; Fazer upload de notebook. Depois Ambiente de execução &rarr; Alterar tipo &rarr; <b style="display:inline;color:inherit">GPU</b>.</div>
-        <div class="up-passo"><b>3. RODE AS CÉLULAS 1 A 4</b>
-          A célula 1 pede o arquivo <code>.env</code>. Pule a 5: quem grava no banco é este site.</div>
-        <div class="up-passo"><b>4. BAIXE O ZIP</b>
-          A última célula gera <code>extracao_chandra.zip</code>. É o único formato aceito aqui.</div>
+            Baixar lote</button>
+          <div id="lote-info" style="font-size:11.5px;color:var(--cinza);margin-top:6px"></div></div>
+        <div class="up-passo"><b>2. BAIXE O NOTEBOOK</b>
+          Abra no Colab (com <b style="display:inline;color:inherit">GPU</b>) ou no Jupyter do servidor.
+          <button class="up-btn sec" onclick="baixarNotebook()" style="margin-top:8px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            extrator_lote.ipynb</button></div>
+        <div class="up-passo"><b>3. RODE NA GPU</b>
+          A célula 2 pede o <code>lote_….zip</code>. Rode até a 4, que baixa o
+          <code>extracao_….zip</code>. Sem servidor de notebook: <code>python extractor/rodar_lote.py lote_….zip</code></div>
+        <div class="up-passo"><b>4. ENVIE O RESULTADO</b>
+          Arraste o <code>extracao_….zip</code> abaixo. É o único formato aceito. Os documentos
+          aparecem na Home como extraídos.</div>
       </div>
       <input type="file" id="up-arquivo" accept=".zip,application/zip" style="display:none" onchange="upEscolher(this.files[0])">
       <div class="up-zona" id="up-zona" onclick="el('up-arquivo').click()">
@@ -1288,12 +1301,29 @@ window.addEventListener("beforeunload", function(e){
    regravar um documento já extraído apaga páginas e blocos que podem ter sido
    curados à mão — isso tem de ser escolha de alguém, não efeito colateral. */
 var _upArq=null;
+async function baixarLote(){
+  var b=el("btn-lote"), q=parseInt(el("lote-qtd").value||"5",10)||5;
+  var men=el("lote-menores").checked;
+  b.disabled=true; el("lote-info").textContent="Montando o lote…";
+  try{
+    var r=await apiFetch(API+"/extracao/lote?quantos="+q+"&menores="+(men?"true":"false"));
+    if(!r.ok) throw new Error((await r.json().catch(function(){return {};})).detail||("HTTP "+r.status));
+    var nome=((r.headers.get("Content-Disposition")||"").match(/filename="([^"]+)"/)||[])[1]||"lote.zip";
+    var docs=r.headers.get("X-Lote-Documentos"), pags=r.headers.get("X-Lote-Paginas");
+    var a=document.createElement("a");
+    a.href=URL.createObjectURL(await r.blob()); a.download=nome;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+    el("lote-info").innerHTML="<b>"+esc(nome)+"</b><br>"+docs+" documento(s), "+pags+" páginas, ~"+
+      Math.max(1,Math.round(pags*17/60))+" min de GPU";
+  }catch(e){ el("lote-info").textContent="Falhou: "+e.message; }
+  b.disabled=false;
+}
 async function baixarNotebook(){
   try{
     var r=await apiFetch(API+"/extracao/notebook.ipynb");
     if(!r.ok) throw new Error((await r.json().catch(function(){return {};})).detail||("HTTP "+r.status));
     var a=document.createElement("a");
-    a.href=URL.createObjectURL(await r.blob()); a.download="colab_chandra.ipynb";
+    a.href=URL.createObjectURL(await r.blob()); a.download="extrator_lote.ipynb";
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
   }catch(e){ alert("Não deu para baixar o notebook: "+e.message); }
 }
@@ -1316,7 +1346,7 @@ async function upEscolher(f){
   if(!f) return;
   if(!/\.zip$/i.test(f.name)){
     _upArq=null;
-    _upMsg("<b>"+esc(f.name)+"</b> não é aceito. Só o <b>.zip</b> que a última célula do notebook gera.", true);
+    _upMsg("<b>"+esc(f.name)+"</b> não é aceito. Só o <b>extracao_….zip</b> que o notebook gera.", true);
     return;
   }
   _upArq=f;
