@@ -54,6 +54,29 @@
     color:#fff;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;
     display:inline-flex;align-items:center;gap:7px;}
   .btn-vet-lista:disabled{background:#e3e3e3;color:#9b9b9b;cursor:default;}
+  /* ── envio de extração pronta ── */
+  .up-card{background:#fff;border:1px solid var(--borda);border-radius:14px;padding:22px 24px;margin-bottom:22px;}
+  .up-card h3{font-size:15px;margin-bottom:4px;}
+  .up-sub{font-size:12.5px;color:var(--cinza);line-height:1.6;margin-bottom:16px;}
+  .up-passos{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;}
+  .up-passo{border:1px solid var(--borda);border-radius:10px;padding:12px 14px;font-size:12.5px;line-height:1.55;background:var(--cinza-bg);}
+  .up-passo b{display:block;font-size:12px;color:var(--verde);margin-bottom:3px;letter-spacing:.3px;}
+  .up-passo code{font-size:11.5px;background:#fff;padding:1px 4px;border-radius:4px;border:1px solid var(--borda);}
+  .up-btn{padding:8px 14px;border:none;border-radius:8px;background:var(--verde);color:#fff;font-weight:700;font-size:12.5px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px;}
+  .up-btn.sec{background:#fff;color:var(--verde);border:1px solid var(--verde);}
+  .up-btn:disabled{background:#e3e3e3;color:#9b9b9b;border-color:#e3e3e3;cursor:default;}
+  .up-zona{border:2px dashed var(--borda);border-radius:12px;padding:26px;text-align:center;font-size:13px;color:var(--cinza);cursor:pointer;transition:border-color .15s,background .15s;}
+  .up-zona:hover,.up-zona.sobre{border-color:var(--verde);background:var(--verde-claro);}
+  .up-zona b{color:#1a1a1a;}
+  .up-tab{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:14px;}
+  .up-tab th{text-align:left;font-weight:600;color:var(--cinza);padding:6px 8px;border-bottom:1px solid var(--borda);}
+  .up-tab td{padding:7px 8px;border-bottom:1px solid #f0f0f0;vertical-align:top;}
+  .up-st{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap;}
+  .up-st.novo{background:#e8f5ec;color:#1E5B31;}
+  .up-st.ja_extraido{background:#fff7e8;color:#9a5b00;}
+  .up-st.desconhecido,.up-st.invalido,.up-st.erro{background:#fdecec;color:#b42318;}
+  .up-st.gravado{background:#1E5B31;color:#fff;}
+  .up-acoes{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px;font-size:12.5px;}
   .busca-faixa{display:flex;align-items:center;gap:14px;margin:0 0 26px;}
   .busca-wrap{display:flex;align-items:center;gap:10px;border:1.5px solid var(--borda);border-radius:11px;
     padding:11px 15px;background:#fff;color:var(--cinza);flex:1;max-width:620px;
@@ -552,13 +575,36 @@
   <div class="home" id="view-gpu" style="display:none">
     <div class="home-hero">
       <h2>Extração</h2>
-      <p>A extração roda no lado com GPU (DocLayout-YOLO + Chandra OCR 2 + Docling + PyMuPDF).
-         Este servidor não extrai — ele guarda a fila e recebe o estado de quem extrai.</p>
+      <p>A extração roda onde há GPU: no Colab, ou num servidor com placa. Este site não extrai.
+         Ele guarda a fila, recebe o estado de quem extrai, e aceita o resultado pronto por upload.</p>
       <div class="home-badges">
         <div class="home-badge"><div class="n" id="gpu-badge-estado">—</div><div class="l">Worker de extração</div></div>
         <div class="home-badge"><div class="n" id="gpu-badge-fila">0</div><div class="l">Na fila</div></div>
         <div class="home-badge"><div class="n" id="gpu-badge-sinal">—</div><div class="l">Último sinal</div></div>
       </div>
+    </div>
+    <div class="up-card" id="up-card">
+      <h3>Enviar extração pronta</h3>
+      <div class="up-sub">Alternativa à célula 5 do notebook. Em vez de o Colab gravar direto no banco, você
+        baixa o <b>.zip</b> da extração e manda aqui. O site confere o pacote inteiro antes de gravar:
+        documento que já foi extraído não é sobrescrito sem você pedir.</div>
+      <div class="up-passos">
+        <div class="up-passo"><b>1. BAIXE O NOTEBOOK</b>
+          <button class="up-btn sec" onclick="baixarNotebook()" style="margin-top:6px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            colab_chandra.ipynb</button></div>
+        <div class="up-passo"><b>2. ABRA NO COLAB COM GPU</b>
+          Arquivo &rarr; Fazer upload de notebook. Depois Ambiente de execução &rarr; Alterar tipo &rarr; <b style="display:inline;color:inherit">GPU</b>.</div>
+        <div class="up-passo"><b>3. RODE AS CÉLULAS 1 A 4</b>
+          A célula 1 pede o arquivo <code>.env</code>. Pule a 5: quem grava no banco é este site.</div>
+        <div class="up-passo"><b>4. BAIXE O ZIP</b>
+          A última célula gera <code>extracao_chandra.zip</code>. É o único formato aceito aqui.</div>
+      </div>
+      <input type="file" id="up-arquivo" accept=".zip,application/zip" style="display:none" onchange="upEscolher(this.files[0])">
+      <div class="up-zona" id="up-zona" onclick="el('up-arquivo').click()">
+        <b>Clique ou arraste o .zip aqui</b><br>Só a saída do notebook é aceita: um zip com <code>index.json</code> e uma pasta por documento.
+      </div>
+      <div id="up-resultado"></div>
     </div>
     <div class="lista-topo">
       <div class="filtros"><span class="filtro-lbl">Worker:</span><span id="gpu-detalhe" style="font-size:12.5px;color:var(--cinza)"></span></div>
@@ -1236,10 +1282,98 @@ window.addEventListener("beforeunload", function(e){
 /* ── Extração: estado de quem extrai ──
    Este servidor nao extrai. Aqui aparece o que o lado GPU reporta
    (POST /api/worker/heartbeat) e o que esta' na fila esperando. */
+/* ── envio de extração pronta (aba Extração) ───────────────────────────────
+   Duas idas ao servidor: /conferir só lê o pacote e diz o que é novo, o que já
+   existe e o que está inválido; /upload grava. A conferência vem antes porque
+   regravar um documento já extraído apaga páginas e blocos que podem ter sido
+   curados à mão — isso tem de ser escolha de alguém, não efeito colateral. */
+var _upArq=null;
+async function baixarNotebook(){
+  try{
+    var r=await apiFetch(API+"/extracao/notebook.ipynb");
+    if(!r.ok) throw new Error((await r.json().catch(function(){return {};})).detail||("HTTP "+r.status));
+    var a=document.createElement("a");
+    a.href=URL.createObjectURL(await r.blob()); a.download="colab_chandra.ipynb";
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+  }catch(e){ alert("Não deu para baixar o notebook: "+e.message); }
+}
+function _upMsg(html, erro){
+  el("up-resultado").innerHTML='<div style="margin-top:14px;padding:11px 13px;border-radius:8px;font-size:12.5px;line-height:1.6;'+
+    (erro?'background:#fdecec;color:#b42318;border:1px solid #f5c2c2':'background:var(--cinza-bg);border:1px solid var(--borda)')+'">'+html+'</div>';
+}
+var _UP_ROT={novo:"novo",ja_extraido:"já extraído",desconhecido:"fora do acervo",invalido:"inválido",erro:"erro",gravado:"gravado"};
+function _upTabela(itens){
+  return '<table class="up-tab"><thead><tr><th>Documento</th><th>Páginas</th><th>Situação</th><th>Detalhe</th></tr></thead><tbody>'+
+    itens.map(function(it){
+      var st=it._gravado?"gravado":it.situacao;
+      var det=it._gravado ? (it.paginas+" pág, "+it.blocos+" blocos"+(it.figuras?", "+it.figuras+" figuras":"")) : (it.motivo||"");
+      return '<tr><td>'+esc(it.arquivo||it.slug||"?")+'</td><td>'+(it.paginas||"—")+'</td>'+
+             '<td><span class="up-st '+st+'">'+(_UP_ROT[st]||st)+'</span></td><td style="color:var(--cinza)">'+esc(det)+'</td></tr>';
+    }).join("")+'</tbody></table>';
+}
+async function upEscolher(f){
+  el("up-arquivo").value="";
+  if(!f) return;
+  if(!/\.zip$/i.test(f.name)){
+    _upArq=null;
+    _upMsg("<b>"+esc(f.name)+"</b> não é aceito. Só o <b>.zip</b> que a última célula do notebook gera.", true);
+    return;
+  }
+  _upArq=f;
+  _upMsg("Conferindo <b>"+esc(f.name)+"</b> ("+(f.size/1048576).toFixed(1)+" MB)…");
+  try{
+    var fd=new FormData(); fd.append("arquivo", f);
+    var r=await apiFetch(API+"/extracao/conferir",{method:"POST",body:fd});
+    var j=await r.json();
+    if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    var it=j.itens||[];
+    var nov=it.filter(function(x){return x.situacao==="novo";}).length;
+    var dup=it.filter(function(x){return x.situacao==="ja_extraido";}).length;
+    var ruim=it.length-nov-dup;
+    el("up-resultado").innerHTML=
+      '<div style="margin-top:16px;font-size:13px"><b>'+esc(f.name)+'</b>: '+it.length+' documento(s) — '+
+      '<b style="color:#1E5B31">'+nov+' novo(s)</b>, '+
+      '<b style="color:#9a5b00">'+dup+' já extraído(s)</b>'+(ruim?', <b style="color:#b42318">'+ruim+' com problema</b>':'')+'</div>'+
+      _upTabela(it)+
+      '<div class="up-acoes">'+
+        (dup?'<label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="up-subst"> '+
+             'Também regravar '+(dup===1?'o documento já extraído':'os '+dup+' já extraídos')+' <span style="color:var(--cinza)">(apaga a extração atual e qualquer edição feita neles)</span></label>':'')+
+        '<button class="up-btn" id="up-gravar" onclick="upGravar()"'+(nov||dup?'':' disabled')+'>Gravar no banco</button>'+
+        '<button class="up-btn sec" onclick="upCancelar()">Cancelar</button>'+
+      '</div>';
+  }catch(e){ _upArq=null; _upMsg("Pacote recusado: "+esc(e.message), true); }
+}
+function upCancelar(){ _upArq=null; el("up-resultado").innerHTML=""; }
+async function upGravar(){
+  if(!_upArq) return;
+  var sub=el("up-subst") && el("up-subst").checked;
+  if(sub && !confirm("Substituir os documentos já extraídos? A extração atual deles, e qualquer edição feita à mão, serão apagadas.")) return;
+  var b=el("up-gravar"); b.disabled=true; b.textContent="Gravando…";
+  try{
+    var fd=new FormData(); fd.append("arquivo",_upArq); fd.append("substituir", sub?"true":"false");
+    var r=await apiFetch(API+"/extracao/upload",{method:"POST",body:fd});
+    var j=await r.json();
+    if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    var linhas=(j.gravados||[]).map(function(g){ g._gravado=true; return g; })
+      .concat(j.pulados||[]).concat(j.falhas||[]);
+    el("up-resultado").innerHTML=
+      '<div style="margin-top:16px;font-size:13px"><b>'+(j.gravados||[]).length+' gravado(s)</b>, '+
+      (j.pulados||[]).length+' pulado(s), '+(j.falhas||[]).length+' com problema.</div>'+_upTabela(linhas);
+    _upArq=null;
+    if((j.gravados||[]).length) carregarDocumentos();
+  }catch(e){ b.disabled=false; b.textContent="Gravar no banco"; _upMsg("Falhou ao gravar: "+esc(e.message), true); }
+}
+(function(){
+  var z=document.getElementById("up-zona"); if(!z) return;
+  ["dragenter","dragover"].forEach(function(ev){ z.addEventListener(ev,function(e){ e.preventDefault(); z.classList.add("sobre"); }); });
+  ["dragleave","drop"].forEach(function(ev){ z.addEventListener(ev,function(e){ e.preventDefault(); z.classList.remove("sobre"); }); });
+  z.addEventListener("drop",function(e){ var f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(f) upEscolher(f); });
+})();
 var _tGpu=null;
 function irExtracaoGPU(){
   el("view-home").style.display="none"; el("view-extract").style.display="none"; el("view-equipe").style.display="none";
   el("view-gpu").style.display="block";
+  var uc=el("up-card"); if(uc) uc.style.display=(CARGO==="leitor")?"none":"block";
   el("topbar-tit").textContent="Extração"; setNav("gpu");
   atualizarGPU();
   clearInterval(_tGpu); _tGpu=setInterval(atualizarGPU, 15000);   // heartbeat e' periodico

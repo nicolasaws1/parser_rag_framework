@@ -6,3 +6,4 @@ python-dotenv
 httpx
 requests          # scripts/ (acervo, checar_rls, testar_acesso)
 pymupdf           # contagem de páginas e conferência dos PDFs em acervo.py
+python-multipart  # upload do zip de extracao na aba Extracao

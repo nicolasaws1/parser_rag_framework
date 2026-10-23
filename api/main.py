@@ -17,7 +17,7 @@ from typing import Any
 from uuid import UUID
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from supabase import create_client
@@ -612,6 +612,103 @@ def worker_estado(pedido: Request):
 # A consulta a' API e' SOB DEMANDA, por botao no site: bater nela a cada visita
 # custaria ~250 registros por pageview sem necessidade. O resultado da ultima
 # sincronizacao fica no audit_log, e e' o que o site mostra ao abrir.
+
+# ── extração feita fora: upload do pacote ────────────────────────────────────
+# Quem rodou o notebook no Colab baixa um zip e manda por aqui. A conferência
+# acontece inteira antes de gravar: estrutura, documento fora do acervo e
+# documento já extraído. Duplicata é recusada por padrão, porque regravar apaga
+# páginas e blocos de uma extração que pode ter sido curada à mão.
+
+NOTEBOOK_URL = ("https://raw.githubusercontent.com/nicolasaws1/parser_rag_framework/"
+                "main/extractor/colab_chandra.ipynb")
+
+
+@app.get("/api/extracao/notebook", tags=["extração"])
+def extracao_notebook(pedido: Request):
+    """Onde baixar o notebook e o que o upload aceita."""
+    auth.exigir_usuario(pedido, sb)
+    from api import extracao
+    return {"notebook": NOTEBOOK_URL,
+            "aceita": list(extracao.EXTENSOES),
+            "limite_mb": extracao.TAMANHO_MAXIMO // 2**20}
+
+
+def _receber_pacote(arquivo: UploadFile) -> bytes:
+    from api import extracao
+    nome = (arquivo.filename or "").lower()
+    if not nome.endswith(extracao.EXTENSOES):
+        raise HTTPException(415, f"só aceito {', '.join(extracao.EXTENSOES)}: é o "
+                                 f"que a última célula do notebook gera")
+    dados = arquivo.file.read(extracao.TAMANHO_MAXIMO + 1)
+    if len(dados) > extracao.TAMANHO_MAXIMO:
+        raise HTTPException(413, f"pacote acima de {extracao.TAMANHO_MAXIMO // 2**20} MB")
+    if not dados.startswith(b"PK"):
+        # extensão certa com conteúdo errado: renomearam outro arquivo para .zip
+        raise HTTPException(415, "o arquivo tem extensão .zip mas não é um zip")
+    return dados
+
+
+@app.get("/api/extracao/notebook.ipynb", tags=["extração"])
+def extracao_notebook_arquivo(pedido: Request):
+    """O notebook do Chandra, como download.
+
+    Vem do GitHub na hora, e não de uma cópia guardada aqui, para não haver
+    duas versões: a imagem da API nem leva a pasta extractor/. Link direto para
+    o raw.githubusercontent abriria o JSON como texto no navegador em vez de
+    baixar, porque o atributo `download` não vale entre origens diferentes.
+    """
+    auth.exigir_usuario(pedido, sb)
+    import httpx
+    from fastapi.responses import Response
+    try:
+        r = httpx.get(NOTEBOOK_URL, timeout=30, follow_redirects=True)
+        r.raise_for_status()
+    except Exception as e:
+        raise HTTPException(502, f"não deu para buscar o notebook no GitHub: {e}")
+    return Response(r.content, media_type="application/x-ipynb+json",
+                    headers={"Content-Disposition":
+                             'attachment; filename="colab_chandra.ipynb"'})
+
+
+@app.post("/api/extracao/conferir", tags=["extração"])
+def extracao_conferir(pedido: Request, arquivo: UploadFile = File(...)):
+    """Só confere: o que é novo, o que já existe, o que está inválido. Não grava."""
+    auth.exigir_cargo(pedido, sb, "admin", "curador")
+    import tempfile
+    from api import extracao
+    dados = _receber_pacote(arquivo)
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            pasta = extracao.abrir_pacote(dados, Path(tmp))
+            itens = extracao.conferir(sb, pasta)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+    return {"arquivo": arquivo.filename, "itens": itens}
+
+
+@app.post("/api/extracao/upload", tags=["extração"])
+def extracao_upload(pedido: Request, arquivo: UploadFile = File(...),
+                    substituir: bool = Form(False)):
+    """Confere e grava. Já extraído só é regravado com `substituir=true`."""
+    quem = auth.exigir_cargo(pedido, sb, "admin", "curador")
+    limitar(pedido, "edicao", "upload-extracao")
+    import tempfile
+    from api import extracao
+    dados = _receber_pacote(arquivo)
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            pasta = extracao.abrir_pacote(dados, Path(tmp))
+            rel = extracao.processar(sb, pasta, substituir=substituir)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+    for g in rel["gravados"]:
+        registrar("pdf_ingerido", quem["email"], g.get("pdf_id"),
+                  {"origem": "upload", "arquivo": arquivo.filename,
+                   "paginas": g.get("paginas"), "blocos": g.get("blocos"),
+                   "substituiu": g.get("situacao") == "ja_extraido"},
+                  pedido.client.host if pedido.client else None)
+    return rel
+
 
 @app.get("/api/curadoria/ultima", tags=["curadoria"])
 def curadoria_ultima(pedido: Request):

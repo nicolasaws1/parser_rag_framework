@@ -25,7 +25,7 @@ fim deste arquivo.
 | 2 | mostra a fila; não baixa nada | segundos |
 | 3 | baixa `QUANTOS` PDFs ainda não extraídos | segundos |
 | 4 | **extrai** | ~17 s por página |
-| 5 | manda ao Supabase e gera os recortes de figura | ~1 min |
+| 5 | manda ao Supabase e gera os recortes de figura (ou pule e use o upload do site) | ~1 min |
 | 6 | confere o acervo | segundos |
 | 7 | baixa um zip da corrida (opcional) | — |
 
@@ -89,6 +89,31 @@ diverge da curadoria.
 **`sem página no bucket, pulando`**, no `gerar_figuras.py` — o documento está
 marcado como extraído mas não tem imagens de página. Sobra de alguma corrida
 interrompida; re-extrair resolve.
+
+## Enviar pelo site em vez da célula 5
+
+Na aba **Extração** do site há o painel *Enviar extração pronta*, com o mesmo
+passo a passo e um botão que baixa este notebook.
+
+1. Rode as células 1 a 4.
+2. **Pule a 5** e rode a 7: ela baixa `extracao_chandra.zip`.
+3. Na aba Extração, arraste o zip para o painel.
+4. O site **confere antes de gravar** e mostra uma tabela:
+
+| situação | o que acontece |
+|---|---|
+| novo | é gravado |
+| já extraído | pulado; só regrava se você marcar *Substituir* |
+| fora do acervo | recusado; sincronize a curadoria antes |
+| inválido | recusado; falta `layout.json` ou `document.md` |
+
+5. Clique em **Gravar no banco**.
+
+Só `.zip` é aceito, e o conteúdo é conferido além da extensão: um PDF renomeado
+para `.zip` é recusado. O limite é de 600 MB por pacote.
+
+A lógica é a mesma da célula 5 (`api/extracao.py`), então os dois caminhos dão o
+mesmo resultado. Só `admin` e `curador` enxergam o painel.
 
 ## O que acontece com o resultado
 
