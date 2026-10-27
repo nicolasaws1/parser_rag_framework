@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY api/ ./api/
 COPY front/ ./front/
 COPY scripts/ ./scripts/
+COPY vetorizador/ ./vetorizador/
 
 # usuário sem privilégio: se a API for comprometida, o atacante não é root
 RUN useradd --create-home --uid 10001 sb100 && chown -R sb100:sb100 /app

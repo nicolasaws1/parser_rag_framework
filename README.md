@@ -87,6 +87,9 @@ api/                         API FastAPI (servidor sem GPU)
   main.py                    rotas de documentos, edição, auditoria, fila, curadoria e equipe
   auth.py                    autenticação via Supabase Auth (cargos admin, curador, leitor)
   curadoria.py               ponte com a API de curadoria da Squad 01
+  extracao.py                lote para a GPU e conferência/gravação do zip de extração devolvido
+  chunker.py                 fatiamento (1024 caracteres, 20% de sobreposição, tabela e figura inteiras)
+  vetorizacao.py             coleções do Qdrant, pacote para a GPU, conferência/gravação dos vetores
 front/
   index.html                 site de inspeção (HTML + CSS + JS num arquivo só, sem build)
 extractor/                   extração (precisa de GPU)
@@ -98,6 +101,11 @@ extractor/                   extração (precisa de GPU)
   hybrid_extractor.ipynb     versão original do extrator (board F04.018), mantida como referência
   testar_notebook.py         simula a execução dos notebooks célula a célula
   README.md                  guia de extração no Colab
+vetorizador/                 vetorização (precisa de GPU, ou CPU com AVX)
+  vetorizador_lote.ipynb     notebook: recebe o pacote do site, devolve vetores_….zip
+  rodar_vetorizacao.py       o mesmo, pela linha de comando
+  embeddings.py              Qwen3-Embedding-0.6B (denso) e opensearch neural sparse (esparso)
+  README.md                  guia da vetorização
 scripts/                     operação do acervo e do banco
   acervo.py                  reconcilia curadoria, banco e storage
   registrar_pdf.py           registra um PDF aprovado ainda não extraído
@@ -152,6 +160,18 @@ python scripts/gerar_figuras.py --aplicar
 
 Na primeira execução o Chandra OCR 2 baixa cerca de 10,6 GB de pesos.
 
+### Vetorização (GPU)
+
+Pela aba **Vetorização** do site: escolha a coleção, marque os documentos que ainda
+não estão nela, baixe o pacote e o notebook `vetorizador_lote.ipynb`, rode na GPU e
+envie o `vetores_….zip` de volta. A máquina com GPU não recebe chave do banco nem do
+Qdrant. Detalhes em [`vetorizador/README.md`](vetorizador/README.md).
+
+```bash
+pip install -r requirements-vetorizador.txt
+python vetorizador/rodar_vetorizacao.py pacote_….zip
+```
+
 ## API
 
 Todas as rotas exigem login, exceto `/api/health` e `/api/health/vivo`. A documentação interativa fica em `/docs` quando a API está no ar.
@@ -162,6 +182,8 @@ Todas as rotas exigem login, exceto `/api/health` e `/api/health/vivo`. A docume
 | Edição | `GET`, `PUT`, `DELETE /api/document/{id}/edicao` |
 | Auditoria | `POST`, `GET /api/log` (o autor vem do token, não do cliente) |
 | Extração | `POST /api/document/{id}/extrair`, `GET /api/fila`, `POST /api/worker/heartbeat`, `GET /api/worker` |
+| Extração por pacote | `GET /api/extracao/lote`, `GET /api/extracao/notebook.ipynb`, `POST /api/extracao/conferir`, `POST /api/extracao/upload` |
+| Vetorização | `GET`, `POST /api/vetorizacao/colecoes`, `GET /api/vetorizacao/documentos`, `POST /api/vetorizacao/pacote`, `GET /api/vetorizacao/notebook.ipynb`, `POST /api/vetorizacao/conferir`, `POST /api/vetorizacao/upload`, `GET /api/vetorizacao/capacidade`, `POST /api/vetorizacao/no-site` |
 | Curadoria | `GET /api/curadoria/ultima`, `POST /api/curadoria/sincronizar` |
 | Equipe | `POST /api/auth/login`, `GET`, `PATCH /api/auth/eu`, `GET`, `POST /api/equipe`, `PATCH`, `DELETE /api/equipe/{uid}` |
 
@@ -202,7 +224,8 @@ No Supabase, `document.md` vai para `pdfs.markdown`, cada bloco vira uma linha d
 
 Em uso interno pela equipe do SB100, com autenticação real (Supabase Auth), RLS no banco e trilha de auditoria.
 
-- [ ] Vetorização no Qdrant a partir dos documentos aprovados.
+- [x] Vetorização no Qdrant pela aba Vetorização (pacote para GPU e upload dos vetores).
+- [ ] Vetorizar no próprio servidor: a CPU da VM não expõe AVX; depende de mudar o tipo de CPU da VM.
 - [ ] Extrair o restante do acervo aprovado pela curadoria.
 - [ ] Validar `supabase/001_base.sql` em um Postgres vazio (o esquema foi reconstruído por introspecção).
 - [ ] Avaliar cache de imagens para o volume previsto (~1000 PDFs por semana, ~10 usuários simultâneos).

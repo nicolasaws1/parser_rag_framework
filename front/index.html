@@ -76,6 +76,19 @@
   .up-st.ja_extraido{background:#fff7e8;color:#9a5b00;}
   .up-st.desconhecido,.up-st.invalido,.up-st.erro{background:#fdecec;color:#b42318;}
   .up-st.gravado{background:#1E5B31;color:#fff;}
+  .vet-barra{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;}
+  .vet-barra select,.vet-barra input{padding:7px 9px;border:1px solid var(--borda);border-radius:8px;font-family:inherit;font-size:13px;background:#fff;}
+  .vet-barra select{min-width:260px;font-weight:600;}
+  .vet-metodos{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:14px;}
+  .vet-metodo{border:1px solid var(--borda);border-radius:12px;padding:14px 16px;}
+  .vet-metodo h4{font-size:13px;margin-bottom:4px;}
+  .vet-chip{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10.5px;font-weight:700;margin-left:4px;background:#eef2ff;color:#3730a3;}
+  .vet-tab-wrap{max-height:460px;overflow:auto;border:1px solid var(--borda);border-radius:10px;margin-top:10px;}
+  .vet-tab-wrap .up-tab{margin-top:0;}
+  .vet-tab-wrap thead th{position:sticky;top:0;background:#fff;z-index:1;}
+  .up-st.ja_vetorizado{background:#fff7e8;color:#9a5b00;}
+  .up-st.nao{background:var(--cinza-bg);color:var(--cinza);}
+  .up-st.legado{background:#eef2ff;color:#3730a3;}
   .up-acoes{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px;font-size:12.5px;}
   .busca-faixa{display:flex;align-items:center;gap:14px;margin:0 0 26px;}
   .busca-wrap{display:flex;align-items:center;gap:10px;border:1.5px solid var(--borda);border-radius:11px;
@@ -407,13 +420,13 @@
     <div class="sb-item ativo" id="nav-home" onclick="irHome()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Home</span></div>
     <div class="sb-item desativado" id="nav-extract" onclick="irExtracao()" title="Abra um documento na Home para analisar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg><span>Analisar</span></div>
     <div class="sb-item" id="nav-gpu" onclick="irExtracaoGPU()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h4M6 14h2M16 10h2M14 14h4"/></svg><span>Extração</span></div>
-    <div class="sb-item" style="opacity:.5;cursor:default"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg><span>Qdrant</span></div>
+    <div class="sb-item" id="nav-vet" onclick="irVetorizacao()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg><span>Vetorização</span></div>
     <div class="sb-item" id="nav-equipe" onclick="irEquipe()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Equipe</span></div>
   </nav>
   <div class="sb-plan">
-    <small>Uso — collection <b style="color:var(--verde)">sb100</b></small>
+    <small>Coleção <b style="color:var(--verde)" id="uso-col">—</b></small>
     <div class="barra"><span id="uso-barra"></span></div>
-    <small id="uso-txt">0 pontos enviados nesta sessão</small>
+    <small id="uso-txt">escolha na aba Vetorização</small>
   </div>
   <div class="sb-user" id="sb-user" onclick="alternarMenuConta(event)" title="Sua conta">
     <div class="av">--</div>
@@ -624,6 +637,85 @@
     </div>
     <div class="lista" id="gpu-fila"></div>
   </div>
+  <div class="home" id="view-vet" style="display:none">
+    <div class="home-hero">
+      <h2>Vetorização</h2>
+      <p>Fatia o texto extraído (1024 caracteres, 20% de sobreposição, tabelas e figuras inteiras) e grava os
+         vetores no Qdrant. Cada coleção é um índice à parte: um documento pode estar numa e faltar em outra,
+         então tudo aqui é sempre em relação à coleção escolhida.</p>
+      <div class="home-badges">
+        <div class="home-badge"><div class="n" id="vet-badge-feitos">—</div><div class="l">Nesta coleção</div></div>
+        <div class="home-badge"><div class="n" id="vet-badge-pontos">—</div><div class="l">Pontos na coleção</div></div>
+        <div class="home-badge"><div class="n" id="vet-badge-cpu">—</div><div class="l">Este servidor</div></div>
+      </div>
+    </div>
+
+    <div class="up-card">
+      <h3>1. Escolha a coleção</h3>
+      <div class="up-sub">A lista vem do Qdrant. Coleção sem os vetores <code>vetor_denso</code> (1024) e
+        <code>vetor_esparso</code> aparece desabilitada: os vetores daqui não cabem nela.</div>
+      <div class="vet-barra">
+        <select id="vet-col" onchange="vetTrocarColecao()"><option>carregando…</option></select>
+        <span id="vet-col-info" style="font-size:12.5px;color:var(--cinza)"></span>
+      </div>
+      <div class="vet-barra" id="vet-nova" style="display:none;margin-top:10px">
+        <input id="vet-nova-nome" placeholder="nova_colecao" maxlength="63" style="width:200px">
+        <button class="up-btn sec" onclick="vetCriarColecao()">Criar coleção</button>
+        <span style="font-size:11.5px;color:var(--cinza)">minúsculas, números e _; começar com <code>teste_</code> marca como teste</span>
+      </div>
+    </div>
+
+    <div class="up-card">
+      <h3>2. Escolha os documentos</h3>
+      <div class="up-sub">Só documentos já extraídos. Quando o texto foi corrigido à mão na tela Analisar,
+        é a versão corrigida que vai para o Qdrant.</div>
+      <div class="vet-barra">
+        <button class="filtro ativo" id="vf-nao" onclick="vetFiltro('nao')">Não vetorizados nesta coleção</button>
+        <button class="filtro" id="vf-sim" onclick="vetFiltro('sim')">Já vetorizados</button>
+        <button class="filtro" id="vf-todos" onclick="vetFiltro('todos')">Todos</button>
+        <input id="vet-busca" placeholder="buscar título ou arquivo" oninput="vetRender()" style="flex:1;min-width:160px">
+      </div>
+      <div class="vet-tab-wrap" id="vet-docs"></div>
+      <div class="up-acoes" style="justify-content:space-between">
+        <span id="vet-sel-info" style="font-size:12.5px">Nenhum selecionado</span>
+        <button class="up-btn sec" onclick="vetLimparSel()">Limpar seleção</button>
+      </div>
+    </div>
+
+    <div class="up-card" id="vet-acoes">
+      <h3>3. Vetorize</h3>
+      <div class="vet-metodos">
+        <div class="vet-metodo">
+          <h4>A. Numa máquina com GPU (Colab ou nuvem)</h4>
+          <div class="up-sub" style="margin-bottom:10px">A máquina não recebe chave nenhuma: leva um pacote daqui e devolve os vetores por aqui.</div>
+          <div class="up-passos" style="grid-template-columns:1fr 1fr">
+            <div class="up-passo"><b>1. BAIXE O PACOTE</b>Os selecionados, com o texto e os metadados.
+              <button class="up-btn" id="vet-btn-pacote" onclick="vetBaixarPacote()" style="margin-top:8px" disabled>Baixar pacote</button>
+              <div id="vet-pacote-info" style="font-size:11.5px;color:var(--cinza);margin-top:6px"></div></div>
+            <div class="up-passo"><b>2. BAIXE O NOTEBOOK</b>Abra no Colab com GPU, ou no Jupyter do servidor.
+              <button class="up-btn sec" onclick="vetBaixarNotebook()" style="margin-top:8px">vetorizador_lote.ipynb</button></div>
+            <div class="up-passo"><b>3. RODE</b>A célula 2 pede o <code>pacote_….zip</code>; a 4 baixa o
+              <code>vetores_….zip</code>. Sem notebook: <code>python vetorizador/rodar_vetorizacao.py pacote_….zip</code></div>
+            <div class="up-passo"><b>4. ENVIE OS VETORES</b>Arraste o <code>vetores_….zip</code> abaixo. A coleção
+              é a que estava escolhida quando o pacote foi baixado.</div>
+          </div>
+          <input type="file" id="vet-arquivo" accept=".zip,application/zip" style="display:none" onchange="vetEscolher(this.files[0])">
+          <div class="up-zona" id="vet-zona" onclick="el('vet-arquivo').click()">
+            <b>Clique ou arraste o vetores_….zip aqui</b><br>Só a saída do vetorizador é aceita.
+          </div>
+        </div>
+        <div class="vet-metodo">
+          <h4>B. Aqui mesmo, no servidor do site</h4>
+          <div class="up-sub" style="margin-bottom:10px">Sem baixar nada. Só funciona se a CPU do servidor tiver AVX e as
+            bibliotecas de embedding estiverem instaladas; o site confere isso antes de liberar.</div>
+          <div id="vet-cap" style="font-size:12.5px;line-height:1.6;color:var(--cinza)">Verificando o servidor…</div>
+          <button class="up-btn" id="vet-btn-site" onclick="vetNoSite()" style="margin-top:10px" disabled>Vetorizar no site</button>
+          <div id="vet-tarefa" style="font-size:12.5px;margin-top:8px"></div>
+        </div>
+      </div>
+      <div id="vet-resultado"></div>
+    </div>
+  </div>
   <div class="extract" id="view-extract">
     <div class="ex-toolbar">
       <span class="ex-back" onclick="irHome()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Voltar</span>
@@ -680,9 +772,9 @@ for pagina in documento:
       </div>
     </div>
     <div class="ex-foot">
-      <button class="btn-vet" id="btn-vet" onclick="vetorizar()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M4 19h16"/></svg> Vetorizar no Qdrant</button>
+      <button class="btn-vet" id="btn-vet" onclick="vetorizar()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M4 19h16"/></svg> Vetorizar</button>
       <div class="vet-live" id="vet-live"></div>
-      <div class="vet-ok" id="vet-ok"><span class="ck"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span><span id="vet-ok-n">0</span> pontos enviados à collection <code>sb100</code></span></div>
+      <div class="vet-ok" id="vet-ok"><span class="ck"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span><span id="vet-ok-n" style="display:none">0</span>Já vetorizado. As coleções estão na aba Vetorização.</span></div>
     </div>
   </div>
 </div>
@@ -765,7 +857,7 @@ const TAGS = {texto:"texto", tabela:"tabela", grafico:"gráfico", foto:"foto/ima
               formula:"fórmula", ocr_pagina:"página (OCR)"};
 
 let extraidos=new Set(), vetorizados=new Set(), selecionados=new Set();
-let filtroCat="todas", filtroSit="todas", ordem="recentes", pontosSessao=0, docAtual=null, paginaAtual=1, parserRodando=false;
+let filtroCat="todas", filtroSit="todas", ordem="recentes", docAtual=null, paginaAtual=1, parserRodando=false;
 
 const el = id => document.getElementById(id);
 
@@ -773,7 +865,8 @@ const el = id => document.getElementById(id);
 function setNav(q){ el("nav-home").classList.toggle("ativo",q==="home");
   el("nav-extract").classList.toggle("ativo",q==="extract");
   var g=el("nav-gpu"); if(g) g.classList.toggle("ativo",q==="gpu");
-  var eqn=el("nav-equipe"); if(eqn) eqn.classList.toggle("ativo",q==="equipe"); }
+  var eqn=el("nav-equipe"); if(eqn) eqn.classList.toggle("ativo",q==="equipe");
+  var vn=el("nav-vet"); if(vn) vn.classList.toggle("ativo",q==="vet"); }
 function toggleSidebar(){ document.body.classList.toggle("collapsed"); }
 function irExtracao(){
   if(docAtual===null) return;   // sem documento aberto nao ha o que analisar
@@ -999,24 +1092,10 @@ async function vetorizarSelecionados(){
       '<p style="font-size:13px;line-height:1.7">'+g.naoExtraidos.length+' dos selecionados ainda não passaram '+
       'pelo parser. Não há texto para vetorizar.</p>'+listaNomes(g.naoExtraidos)+
       '<div style="margin-top:12px;font-size:12px;color:var(--cinza)">Extraia primeiro e depois vetorize.</div>');
-    return;
+    if(!g.extraidos.length) return;
   }
-  if(g.vetorizados.length){
-    var so = g.naoVet.length;
-    abrirPainel("Já vetorizados",
-      '<p style="font-size:13px;line-height:1.7"><b>'+g.vetorizados.length+'</b> dos selecionados já estão no Qdrant. '+
-      'Vetorizar de novo criaria pontos duplicados no índice.</p>'+listaNomes(g.vetorizados)+
-      (so ? '<div style="margin-top:14px;font-size:13px">Os outros <b>'+so+'</b> ainda não foram vetorizados.</div>' : '')+
-      '<div style="margin-top:12px;font-size:12px;color:var(--cinza)">Use o filtro <b>Não vetorizados</b> para separar.</div>');
-    if(!so) return;
-  }
-  abrirPainel("Vetorização",
-    '<p style="font-size:13px;line-height:1.7">'+g.naoVet.length+' documento(s) prontos para vetorizar.</p>'+
-    listaNomes(g.naoVet)+
-    '<div style="margin-top:14px;padding:11px 13px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;'+
-    'font-size:12.5px;color:#7c2d12;line-height:1.6"><b>O vetorizador ainda não está ligado.</b> '+
-    'A segmentação e o envio ao Qdrant (collection <code>sb100</code>) rodam do lado com GPU e ainda não foram '+
-    'escritos. Este botão hoje só valida a seleção — nenhum ponto é enviado.</div>');
+  // a escolha da coleção e o "já está lá?" ficam na aba Vetorização
+  irVetorizacao(g.extraidos.map(function(i){ return IDX[i].id; }));
 }
 /* ── PARSER ──
    Este servidor NAO extrai: a extracao roda no lado com GPU (hoje o notebook no
@@ -1077,7 +1156,7 @@ function analisarUm(i){
 }
 
 /* ── HOME/EXTRACT switch ── */
-function irHome(){ el("view-home").style.display="block"; el("view-extract").style.display="none"; el("view-gpu").style.display="none"; el("view-equipe").style.display="none"; el("topbar-tit").textContent="Home"; setNav("home"); renderHome(); }
+function irHome(){ el("view-home").style.display="block"; el("view-extract").style.display="none"; el("view-gpu").style.display="none"; el("view-equipe").style.display="none"; el("view-vet").style.display="none"; el("topbar-tit").textContent="Home"; setNav("home"); renderHome(); }
 
 function refletirEdicao(lay){
   var b=el("btn-descartar");
@@ -1088,7 +1167,7 @@ async function abrirDoc(i){
   docAtual=i;   // abrir NAO extrai: quem marca extraido e' o banco, na ingestao
   el("nav-extract").classList.remove("desativado");   // libera a aba Analisar
   const d=IDX[i];
-  el("view-home").style.display="none"; el("view-gpu").style.display="none"; el("view-equipe").style.display="none"; el("view-extract").style.display="flex";
+  el("view-home").style.display="none"; el("view-gpu").style.display="none"; el("view-equipe").style.display="none"; el("view-vet").style.display="none"; el("view-extract").style.display="flex";
   el("topbar-tit").textContent="Analisar"; el("ex-filename").textContent=d.arquivo; setNav("extract");
   paginaAtual=1; legFiltro="tudo";
   if(!d.extraido){ mostrarNaoExtraido(d, i); return; }
@@ -1399,9 +1478,265 @@ async function upGravar(){
   ["dragleave","drop"].forEach(function(ev){ z.addEventListener(ev,function(e){ e.preventDefault(); z.classList.remove("sobre"); }); });
   z.addEventListener("drop",function(e){ var f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(f) upEscolher(f); });
 })();
+/* ── VETORIZAÇÃO ──
+   Mesmo desenho da extração: pacote sai daqui, a GPU devolve vetores, o site
+   grava no Qdrant. Tudo é relativo à coleção escolhida: "já vetorizado" quer
+   dizer "já tem pontos NESTA coleção", inclusive os gravados pelos scripts
+   antigos, que só deixaram o nome do arquivo no payload. */
+var VET_COL=null, VET_COLS=[], VET_DOCS=[], VET_SEL=new Set(), VET_FILTRO="nao", VET_PRE=null, _vetArq=null, _tVet=null, VET_MAX=100;
+function irVetorizacao(pre){
+  el("view-home").style.display="none"; el("view-extract").style.display="none";
+  el("view-gpu").style.display="none"; el("view-equipe").style.display="none";
+  el("view-vet").style.display="block";
+  el("topbar-tit").textContent="Vetorização"; setNav("vet");
+  var pode=(CARGO!=="leitor");
+  el("vet-acoes").style.display=pode?"block":"none";
+  el("vet-nova").style.display=(CARGO==="admin")?"flex":"none";
+  if(pre && pre.length){ VET_PRE=pre; VET_FILTRO="todos"; }
+  vetCarregarColecoes();
+  vetCapacidade();
+}
+async function vetCarregarColecoes(escolher){
+  var sel=el("vet-col");
+  try{
+    var r=await apiFetch(API+"/vetorizacao/colecoes"); var j=await r.json();
+    if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    VET_COLS=j;
+    var guardada=null; try{ guardada=localStorage.getItem("sb100_vet_col"); }catch(_){}
+    var alvo=escolher||VET_COL||guardada;
+    if(!VET_COLS.some(function(c){ return c.nome===alvo&&c.compativel; })){
+      var sb=VET_COLS.filter(function(c){ return c.nome==="sb100"&&c.compativel; })[0];
+      var prim=VET_COLS.filter(function(c){ return c.compativel&&!c.teste; })[0]||VET_COLS.filter(function(c){ return c.compativel; })[0];
+      alvo=(sb||prim||{}).nome||null;
+    }
+    sel.innerHTML=VET_COLS.map(function(c){
+      return '<option value="'+esc(c.nome)+'"'+(c.compativel?'':' disabled')+(c.nome===alvo?' selected':'')+'>'+
+        esc(c.nome)+' ('+c.pontos.toLocaleString("pt-BR")+' pontos)'+(c.teste?' [teste]':'')+(c.compativel?'':' — incompatível')+'</option>';
+    }).join("");
+    VET_COL=alvo;
+    await vetCarregarDocs();
+  }catch(e){ sel.innerHTML='<option>Qdrant indisponível</option>'; el("vet-docs").innerHTML='<div class="md-vazio">'+esc(e.message)+'</div>'; }
+}
+function vetTrocarColecao(){
+  VET_COL=el("vet-col").value; VET_SEL.clear();
+  try{ localStorage.setItem("sb100_vet_col", VET_COL); }catch(_){}
+  vetCarregarDocs();
+}
+async function vetCriarColecao(){
+  var nome=(el("vet-nova-nome").value||"").trim();
+  if(!nome) return;
+  if(!confirm("Criar a coleção "+nome+" no Qdrant?")) return;
+  try{
+    var r=await apiFetch(API+"/vetorizacao/colecoes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome:nome})});
+    var j=await r.json(); if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    el("vet-nova-nome").value=""; VET_SEL.clear();
+    try{ localStorage.setItem("sb100_vet_col", j.nome); }catch(_){}
+    await vetCarregarColecoes(j.nome);
+  }catch(e){ alert("Não criou: "+e.message); }
+}
+async function vetCarregarDocs(){
+  var c=VET_COLS.filter(function(x){ return x.nome===VET_COL; })[0];
+  el("vet-badge-pontos").textContent=c?c.pontos.toLocaleString("pt-BR"):"—";
+  el("vet-col-info").textContent=c?(c.teste?"coleção de teste":""):"";
+  if(!VET_COL){ el("vet-docs").innerHTML='<div class="md-vazio">Nenhuma coleção compatível.</div>'; return; }
+  el("vet-docs").innerHTML='<div class="md-vazio">Conferindo o que já está em '+esc(VET_COL)+'…</div>';
+  try{
+    var r=await apiFetch(API+"/vetorizacao/documentos?colecao="+encodeURIComponent(VET_COL));
+    var j=await r.json(); if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    VET_DOCS=j;
+  }catch(e){ el("vet-docs").innerHTML='<div class="md-vazio">'+esc(e.message)+'</div>'; return; }
+  if(VET_PRE){
+    var ids=new Set(VET_PRE); VET_PRE=null;
+    VET_DOCS.forEach(function(d){ if(ids.has(d.pdf_id)&&!d.vetorizado) VET_SEL.add(d.pdf_id); });
+    if(VET_SEL.size) VET_FILTRO="nao";
+  }
+  var feitos=VET_DOCS.filter(function(d){ return d.vetorizado; }).length;
+  el("vet-badge-feitos").textContent=feitos+" de "+VET_DOCS.length;
+  el("uso-col").textContent=VET_COL;
+  el("uso-txt").textContent=feitos+" de "+VET_DOCS.length+" extraídos nela";
+  el("uso-barra").style.width=(VET_DOCS.length?Math.round(100*feitos/VET_DOCS.length):0)+"%";
+  vetFiltro(VET_FILTRO);
+}
+function vetFiltro(f){
+  VET_FILTRO=f;
+  ["nao","sim","todos"].forEach(function(k){ el("vf-"+k).classList.toggle("ativo",k===f); });
+  vetRender();
+}
+function _vetComo(d){
+  if(!d.vetorizado) return '<span class="up-st nao">não vetorizado</span>';
+  var c=d.como||{};
+  if(c.legado) return '<span class="up-st legado">scripts antigos</span> <span style="color:var(--cinza)">'+d.pontos+' pontos</span>';
+  return '<span class="up-st ja_vetorizado">'+d.pontos+' pontos</span> <span style="color:var(--cinza)">'+
+    (c.chunk?c.chunk+'/'+c.overlap:'')+(d.quando?' · '+_quando(d.quando):'')+(c.origem==="edicao"?' · texto editado':'')+'</span>';
+}
+function vetVisiveis(){
+  var q=(el("vet-busca").value||"").toLowerCase();
+  return VET_DOCS.filter(function(d){
+    if(VET_FILTRO==="nao"&&d.vetorizado) return false;
+    if(VET_FILTRO==="sim"&&!d.vetorizado) return false;
+    return !q||((d.titulo||"")+" "+d.arquivo).toLowerCase().indexOf(q)>=0;
+  });
+}
+function vetRender(){
+  var v=vetVisiveis();
+  if(!v.length){ el("vet-docs").innerHTML='<div class="md-vazio">'+
+    (VET_FILTRO==="nao"?'Todos os documentos extraídos já estão em '+esc(VET_COL)+'.':'Nada com esse filtro.')+'</div>'; vetSelInfo(); return; }
+  var todos=v.every(function(d){ return VET_SEL.has(d.pdf_id); });
+  el("vet-docs").innerHTML='<table class="up-tab"><thead><tr><th style="width:28px"><input type="checkbox" '+(todos?'checked ':'')+
+    'onclick="vetTodos(this.checked)" title="selecionar os visíveis"></th><th>Documento</th><th>Ano</th><th>Pág.</th><th>Nesta coleção</th></tr></thead><tbody>'+
+    v.map(function(d){
+      return '<tr><td><input type="checkbox" data-id="'+esc(d.pdf_id)+'" '+(VET_SEL.has(d.pdf_id)?'checked ':'')+'onclick="vetSel(this)"></td>'+
+        '<td><div style="font-weight:600">'+esc((d.titulo||d.arquivo).slice(0,110))+(d.editado?'<span class="vet-chip" title="tem correção manual; ela é que vai para o Qdrant">editado</span>':'')+'</div>'+
+        '<div style="color:var(--cinza);font-size:11.5px">'+esc(d.arquivo)+'</div></td>'+
+        '<td>'+esc(d.ano||"—")+'</td><td>'+(d.paginas||"—")+'</td><td>'+_vetComo(d)+'</td></tr>';
+    }).join("")+'</tbody></table>';
+  vetSelInfo();
+}
+function vetSel(cb){ var id=cb.getAttribute("data-id"); if(cb.checked) VET_SEL.add(id); else VET_SEL.delete(id); vetSelInfo(); }
+function vetTodos(on){ vetVisiveis().forEach(function(d){ if(on) VET_SEL.add(d.pdf_id); else VET_SEL.delete(d.pdf_id); }); vetRender(); }
+function vetLimparSel(){ VET_SEL.clear(); vetRender(); }
+function vetSelInfo(){
+  var sel=VET_DOCS.filter(function(d){ return VET_SEL.has(d.pdf_id); });
+  var ja=sel.filter(function(d){ return d.vetorizado; }).length;
+  var pags=sel.reduce(function(a,d){ return a+(d.paginas||0); },0);
+  var n=sel.length;
+  el("vet-sel-info").innerHTML=!n?"Nenhum selecionado":
+    ('<b>'+n+'</b> selecionado(s), '+pags+' páginas, para <b>'+esc(VET_COL)+'</b>'+
+     (ja?' <span style="color:#9a5b00">('+ja+' já estão nesta coleção e serão pulados, a menos que você peça para regravar)</span>':'')+
+     (n>VET_MAX?' <span style="color:#b42318">máximo de '+VET_MAX+' por pacote</span>':''));
+  var ok=n>0&&n<=VET_MAX;
+  el("vet-btn-pacote").disabled=!ok;
+  el("vet-btn-site").disabled=!ok||!(_VET_CAP&&_VET_CAP.pode);
+}
+async function vetBaixarPacote(){
+  var ids=Array.from(VET_SEL); if(!ids.length) return;
+  var b=el("vet-btn-pacote"); b.disabled=true; el("vet-pacote-info").textContent="Montando o pacote…";
+  try{
+    var r=await apiFetch(API+"/vetorizacao/pacote",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({colecao:VET_COL,ids:ids})});
+    if(!r.ok) throw new Error((await r.json().catch(function(){return {};})).detail||("HTTP "+r.status));
+    var nome=((r.headers.get("Content-Disposition")||"").match(/filename="([^"]+)"/)||[])[1]||"pacote.zip";
+    var a=document.createElement("a"); a.href=URL.createObjectURL(await r.blob()); a.download=nome;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+    el("vet-pacote-info").innerHTML="<b>"+esc(nome)+"</b><br>"+ids.length+" documento(s) para "+esc(VET_COL);
+  }catch(e){ el("vet-pacote-info").textContent="Falhou: "+e.message; }
+  b.disabled=false;
+}
+async function vetBaixarNotebook(){
+  try{
+    var r=await apiFetch(API+"/vetorizacao/notebook.ipynb");
+    if(!r.ok) throw new Error((await r.json().catch(function(){return {};})).detail||("HTTP "+r.status));
+    var a=document.createElement("a"); a.href=URL.createObjectURL(await r.blob()); a.download="vetorizador_lote.ipynb";
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+  }catch(e){ alert("Não deu para baixar o notebook: "+e.message); }
+}
+function _vetMsg(html, erro){
+  el("vet-resultado").innerHTML='<div style="margin-top:14px;padding:11px 13px;border-radius:8px;font-size:12.5px;line-height:1.6;'+
+    (erro?'background:#fdecec;color:#b42318;border:1px solid #f5c2c2':'background:var(--cinza-bg);border:1px solid var(--borda)')+'">'+html+'</div>';
+}
+var _VET_ROT={novo:"novo",ja_vetorizado:"já na coleção",desconhecido:"fora do acervo",invalido:"inválido",erro:"erro",gravado:"gravado"};
+function _vetTabela(itens){
+  return '<table class="up-tab"><thead><tr><th>Documento</th><th>Trechos</th><th>Situação</th><th>Detalhe</th></tr></thead><tbody>'+
+    itens.map(function(it){
+      var st=it._gravado?"gravado":it.situacao;
+      var det=it._gravado?(it.pontos+" pontos gravados"):(it.motivo||"");
+      return '<tr><td>'+esc(it.titulo||it.arquivo||"?")+'</td><td>'+(it.trechos||"—")+'</td>'+
+        '<td><span class="up-st '+st+'">'+(_VET_ROT[st]||st)+'</span></td><td style="color:var(--cinza)">'+esc(det)+'</td></tr>';
+    }).join("")+'</tbody></table>';
+}
+async function vetEscolher(f){
+  el("vet-arquivo").value="";
+  if(!f) return;
+  if(!/\.zip$/i.test(f.name)){ _vetArq=null; _vetMsg("<b>"+esc(f.name)+"</b> não é aceito. Só o <b>vetores_….zip</b> que o vetorizador gera.", true); return; }
+  _vetArq=f;
+  _vetMsg("Conferindo <b>"+esc(f.name)+"</b> ("+(f.size/1048576).toFixed(1)+" MB)…");
+  try{
+    var fd=new FormData(); fd.append("arquivo", f);
+    var r=await apiFetch(API+"/vetorizacao/conferir",{method:"POST",body:fd});
+    var j=await r.json(); if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    var it=j.itens||[];
+    var nov=it.filter(function(x){return x.situacao==="novo";}).length;
+    var dup=it.filter(function(x){return x.situacao==="ja_vetorizado";}).length;
+    var ruim=it.length-nov-dup;
+    var outra=(j.colecao!==VET_COL);
+    el("vet-resultado").innerHTML=
+      '<div style="margin-top:16px;font-size:13px"><b>'+esc(f.name)+'</b> vai para a coleção <b>'+esc(j.colecao)+'</b>: '+
+      it.length+' documento(s), <b style="color:#1E5B31">'+nov+' novo(s)</b>, <b style="color:#9a5b00">'+dup+' já na coleção</b>'+
+      (ruim?', <b style="color:#b42318">'+ruim+' com problema</b>':'')+'</div>'+
+      (outra?'<div style="font-size:12.5px;color:#9a5b00;margin-top:4px">O pacote foi feito para '+esc(j.colecao)+', não para a coleção escolhida acima ('+esc(VET_COL)+'). Vale a do pacote.</div>':'')+
+      (j.avisos||[]).map(function(a){ return '<div style="font-size:12.5px;color:#9a5b00;margin-top:4px">'+esc(a)+'</div>'; }).join("")+
+      _vetTabela(it)+
+      '<div class="up-acoes">'+
+        (dup?'<label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="vet-subst"> '+
+          'Também regravar '+(dup===1?'o documento que já está':'os '+dup+' que já estão')+' na coleção <span style="color:var(--cinza)">(apaga os pontos atuais dele, inclusive os dos scripts antigos)</span></label>':'')+
+        '<button class="up-btn" id="vet-gravar" onclick="vetGravar()"'+(nov||dup?'':' disabled')+'>Gravar no Qdrant</button>'+
+        '<button class="up-btn sec" onclick="vetCancelar()">Cancelar</button>'+
+      '</div>';
+  }catch(e){ _vetArq=null; _vetMsg("Pacote recusado: "+esc(e.message), true); }
+}
+function vetCancelar(){ _vetArq=null; el("vet-resultado").innerHTML=""; }
+async function vetGravar(){
+  if(!_vetArq) return;
+  var sub=el("vet-subst")&&el("vet-subst").checked;
+  if(sub&&!confirm("Apagar os pontos atuais desses documentos na coleção e gravar os novos?")) return;
+  var b=el("vet-gravar"); b.disabled=true; b.textContent="Gravando…";
+  try{
+    var fd=new FormData(); fd.append("arquivo",_vetArq); fd.append("substituir", sub?"true":"false");
+    var r=await apiFetch(API+"/vetorizacao/upload",{method:"POST",body:fd});
+    var j=await r.json(); if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    _vetResumo(j);
+    _vetArq=null;
+  }catch(e){ b.disabled=false; b.textContent="Gravar no Qdrant"; _vetMsg("Falhou ao gravar: "+esc(e.message), true); }
+}
+function _vetResumo(j){
+  var linhas=(j.gravados||[]).map(function(g){ g._gravado=true; return g; }).concat(j.pulados||[]).concat(j.falhas||[]);
+  el("vet-resultado").innerHTML='<div style="margin-top:16px;font-size:13px">Coleção <b>'+esc(j.colecao)+'</b>: <b>'+
+    (j.gravados||[]).length+' gravado(s)</b>, '+(j.pulados||[]).length+' pulado(s), '+(j.falhas||[]).length+' com problema.</div>'+_vetTabela(linhas);
+  if((j.gravados||[]).length){ VET_SEL.clear(); vetCarregarColecoes(j.colecao); carregarDocumentos(); }
+}
+var _VET_CAP=null;
+async function vetCapacidade(){
+  var box=el("vet-cap");
+  try{
+    var r=await apiFetch(API+"/vetorizacao/capacidade"); var j=await r.json();
+    if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    _VET_CAP=j;
+    el("vet-badge-cpu").textContent=j.pode?"calcula":"só GPU";
+    box.innerHTML=j.pode
+      ?'<span style="color:#1E5B31;font-weight:700">Disponível.</span> CPU com AVX'+(j.torch_cpu?' ('+esc(j.torch_cpu)+')':'')+'. Bem mais lento que GPU: use para poucos documentos.'
+      :'<span style="color:#b42318;font-weight:700">Indisponível aqui.</span> '+esc((j.motivo||"").charAt(0).toUpperCase()+(j.motivo||"").slice(1));
+  }catch(e){ _VET_CAP=null; el("vet-badge-cpu").textContent="?"; box.textContent="Não deu para verificar: "+e.message; }
+  vetSelInfo();
+}
+async function vetNoSite(){
+  var ids=Array.from(VET_SEL); if(!ids.length) return;
+  if(!confirm("Vetorizar "+ids.length+" documento(s) em "+VET_COL+" aqui no servidor?")) return;
+  el("vet-btn-site").disabled=true;
+  try{
+    var r=await apiFetch(API+"/vetorizacao/no-site",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({colecao:VET_COL,ids:ids})});
+    var j=await r.json(); if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    el("vet-tarefa").textContent=j.estado+"…";
+    clearInterval(_tVet);
+    _tVet=setInterval(async function(){
+      try{
+        var t=await (await apiFetch(API+"/vetorizacao/tarefa/"+j.tarefa)).json();
+        el("vet-tarefa").textContent=t.estado+(t.erro?": "+t.erro:"…");
+        if(t.estado==="concluído"||t.estado==="falhou"){ clearInterval(_tVet); vetSelInfo();
+          if(t.resultado) _vetResumo(t.resultado); }
+      }catch(e){ clearInterval(_tVet); el("vet-tarefa").textContent="Perdi a tarefa: "+e.message; }
+    }, 5000);
+  }catch(e){ el("vet-tarefa").textContent="Recusado: "+e.message; vetSelInfo(); }
+}
+(function(){
+  var z=document.getElementById("vet-zona"); if(!z) return;
+  ["dragenter","dragover"].forEach(function(ev){ z.addEventListener(ev,function(e){ e.preventDefault(); z.classList.add("sobre"); }); });
+  ["dragleave","drop"].forEach(function(ev){ z.addEventListener(ev,function(e){ e.preventDefault(); z.classList.remove("sobre"); }); });
+  z.addEventListener("drop",function(e){ var f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(f) vetEscolher(f); });
+})();
 var _tGpu=null;
 function irExtracaoGPU(){
-  el("view-home").style.display="none"; el("view-extract").style.display="none"; el("view-equipe").style.display="none";
+  el("view-home").style.display="none"; el("view-extract").style.display="none"; el("view-equipe").style.display="none"; el("view-vet").style.display="none";
   el("view-gpu").style.display="block";
   var uc=el("up-card"); if(uc) uc.style.display=(CARGO==="leitor")?"none":"block";
   el("topbar-tit").textContent="Extração"; setNav("gpu");
@@ -1669,7 +2004,7 @@ function msgConta(id,txt,erro){
    conta nova. A tela de login nao tem "criar conta" de proposito. */
 async function irEquipe(){
   el("view-home").style.display="none"; el("view-extract").style.display="none";
-  el("view-gpu").style.display="none"; el("view-equipe").style.display="block";
+  el("view-gpu").style.display="none"; el("view-vet").style.display="none"; el("view-equipe").style.display="block";
   el("topbar-tit").textContent="Equipe"; setNav("equipe");
   var bn=el("eq-btn-novo"); if(bn) bn.style.display = (CARGO==="admin") ? "" : "none";
   formIntegrante(false); await carregarEquipe();
@@ -1813,7 +2148,7 @@ async function abrirConfigs(){
     linha("Páginas no acervo", pgs)+
     linha("Limite de edições", "5 por minuto, por documento")+
     linha("Limite de leituras", "5 por minuto, por documento")+
-    linha("Collection do Qdrant", "sb100")+
+    linha("Coleções do Qdrant", "escolhidas na aba Vetorização")+
     '<div style="margin-top:14px;padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;font-size:12px;color:#7c2d12">'+
     '<b>Autenticação é protótipo.</b> O login aceita qualquer usuário e senha e não protege nada. '+
     'O campo "quem" do histórico registra o que foi digitado, não uma identidade verificada.</div>');
@@ -2136,26 +2471,15 @@ function scrollPdfPara(bx){
 function resetVetFoot(i){
   const btn=el("btn-vet"), live=el("vet-live"), ok=el("vet-ok");
   btn.classList.remove("rodando"); btn.disabled=false; btn.style.display="flex";
-  btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M4 19h16"/></svg> Vetorizar no Qdrant';
+  btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M4 19h16"/></svg> Vetorizar';
   live.innerHTML=""; live.style.display="flex"; ok.style.display="none";
-  if(vetorizados.has(i)){ btn.style.display="none"; ok.style.display="flex"; el("vet-ok-n").textContent=pontosDoc(i); }
+  // já estar numa coleção não impede de ir para outra: o botão continua
+  if(vetorizados.has(i)) ok.style.display="flex";
 }
-function pontosDoc(i){ const r=IDX[i].resumo; return (IDX[i].n_paginas*8)+r.tabelas*3+r.figuras*2; } // estimativa de pontos p/ demo
 function vetorizar(){
-  const total=pontosDoc(docAtual); const btn=el("btn-vet"), live=el("vet-live");
-  btn.disabled=true; btn.classList.add("rodando"); btn.innerHTML='<span class="spinner"></span> Vetorizando...';
-  live.innerHTML=`<span>Enviando ao Qdrant</span> <b id="live-n">0</b> <span>/ ${total} pontos</span>`;
-  const alvo=live.querySelector("#live-n"); const t0=performance.now(),dur=2600;
-  const timer=setInterval(()=>{
-    const k=Math.min(1,(performance.now()-t0)/dur); alvo.textContent=Math.round(total*k);
-    if(k>=1){ clearInterval(timer);
-      vetorizados.add(docAtual); pontosSessao+=total;
-      el("uso-txt").textContent=pontosSessao+" pontos enviados nesta sessão";
-      el("uso-barra").style.width=Math.min(100,pontosSessao/12)+"%";
-      btn.style.display="none"; live.style.display="none";
-      const ok=el("vet-ok"); ok.style.display="flex"; el("vet-ok-n").textContent=total;
-    }
-  },40);
+  // o botão do Analisar não vetoriza sozinho: falta escolher a coleção
+  if(docAtual===null) return;
+  irVetorizacao([IDX[docAtual].id]);
 }
 
 /* init */

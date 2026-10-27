@@ -1,0 +1,6 @@
+# Só para quem CALCULA embeddings: o script de vetorização na GPU, ou um
+# servidor com AVX que vetorize pelo próprio site. A API não precisa disto.
+torch
+transformers
+sentence-transformers>=3.0
+numpy

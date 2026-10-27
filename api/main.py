@@ -738,6 +738,203 @@ def extracao_upload(pedido: Request, arquivo: UploadFile = File(...),
     return rel
 
 
+# ── vetorização ──────────────────────────────────────────────────────────────
+# Mesmo desenho da extração: o site entrega um pacote, quem tem GPU devolve os
+# vetores, o site grava no Qdrant. A coleção é escolhida a cada passo, porque
+# "já vetorizado" só tem sentido dentro de uma coleção.
+
+VET_NOTEBOOK_URL = ("https://raw.githubusercontent.com/nicolasaws1/parser_rag_framework/"
+                    "main/vetorizador/vetorizador_lote.ipynb")
+
+
+class NovaColecao(BaseModel):
+    nome: str
+
+
+class PedidoPacote(BaseModel):
+    colecao: str
+    ids: list[str]
+
+
+def _vet():
+    from api import vetorizacao
+    return vetorizacao
+
+
+def _qdrant_ou_502(f, *a, **k):
+    try:
+        return f(*a, **k)
+    except (RuntimeError, OSError) as e:
+        raise HTTPException(502, f"Qdrant indisponível: {e}")
+
+
+@app.get("/api/vetorizacao/colecoes", tags=["vetorização"])
+def vet_colecoes(pedido: Request):
+    auth.exigir_usuario(pedido, sb)
+    return _qdrant_ou_502(_vet().listar_colecoes)
+
+
+@app.post("/api/vetorizacao/colecoes", tags=["vetorização"])
+def vet_criar_colecao(nova: NovaColecao, pedido: Request):
+    """Só admin: coleção nova é decisão de projeto, não de curadoria."""
+    quem = auth.exigir_cargo(pedido, sb, "admin")
+    try:
+        c = _qdrant_ou_502(_vet().criar_colecao, nova.nome.strip())
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    registrar("documento_editado", quem["email"], None,
+              {"acao": "colecao_criada", "colecao": c["nome"]},
+              pedido.client.host if pedido.client else None)
+    return c
+
+
+@app.get("/api/vetorizacao/documentos", tags=["vetorização"])
+def vet_documentos(colecao: str, pedido: Request):
+    """Documentos extraídos e se cada um já está NESTA coleção, e como."""
+    auth.exigir_usuario(pedido, sb)
+    return _qdrant_ou_502(_vet().status_documentos, sb, colecao)
+
+
+@app.post("/api/vetorizacao/pacote", tags=["vetorização"])
+def vet_pacote(ped: PedidoPacote, pedido: Request):
+    """Zip com blocos (com edições aplicadas), .md e metadados, para a GPU."""
+    quem = auth.exigir_cargo(pedido, sb, "admin", "curador")
+    limitar(pedido, "leitura", "pacote-vetorizacao")
+    from fastapi.responses import Response
+    try:
+        dados, resumo = _vet().montar_pacote(sb, ped.colecao, ped.ids, quem["email"])
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    registrar("extracao_solicitada", quem["email"], None,
+              {"acao": "pacote_vetorizacao", **resumo},
+              pedido.client.host if pedido.client else None)
+    return Response(dados, media_type="application/zip", headers={
+        "Content-Disposition": f'attachment; filename="pacote_{resumo["pacote"]}.zip"'})
+
+
+@app.get("/api/vetorizacao/notebook.ipynb", tags=["vetorização"])
+def vet_notebook(pedido: Request):
+    auth.exigir_usuario(pedido, sb)
+    import httpx
+    from fastapi.responses import Response
+    try:
+        r = httpx.get(VET_NOTEBOOK_URL, timeout=30, follow_redirects=True)
+        r.raise_for_status()
+    except Exception as e:
+        raise HTTPException(502, f"não deu para buscar o notebook no GitHub: {e}")
+    return Response(r.content, media_type="application/x-ipynb+json", headers={
+        "Content-Disposition": 'attachment; filename="vetorizador_lote.ipynb"'})
+
+
+def _receber_vetores(arquivo: UploadFile) -> bytes:
+    nome = (arquivo.filename or "").lower()
+    if not nome.endswith(".zip"):
+        raise HTTPException(415, "só aceito o vetores_….zip que o script gera")
+    dados = arquivo.file.read(_vet().TAMANHO_MAXIMO + 1)
+    if len(dados) > _vet().TAMANHO_MAXIMO:
+        raise HTTPException(413, "pacote acima de 600 MB")
+    if not dados.startswith(b"PK"):
+        raise HTTPException(415, "o arquivo tem extensão .zip mas não é um zip")
+    return dados
+
+
+@app.post("/api/vetorizacao/conferir", tags=["vetorização"])
+def vet_conferir(pedido: Request, arquivo: UploadFile = File(...),
+                 colecao: str | None = Form(None)):
+    auth.exigir_cargo(pedido, sb, "admin", "curador")
+    import tempfile
+    dados = _receber_vetores(arquivo)
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            pasta = _vet().abrir_vetores(dados, Path(tmp))
+            return _qdrant_ou_502(_vet().conferir_vetores, sb, pasta, colecao or None)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+
+
+@app.post("/api/vetorizacao/upload", tags=["vetorização"])
+def vet_upload(pedido: Request, arquivo: UploadFile = File(...),
+               substituir: bool = Form(False), colecao: str | None = Form(None)):
+    quem = auth.exigir_cargo(pedido, sb, "admin", "curador")
+    limitar(pedido, "edicao", "upload-vetores")
+    import tempfile
+    dados = _receber_vetores(arquivo)
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            pasta = _vet().abrir_vetores(dados, Path(tmp))
+            rel = _qdrant_ou_502(_vet().importar_vetores, sb, pasta, substituir, colecao or None)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+    for g in rel["gravados"]:
+        registrar("documento_vetorizado", quem["email"], g["pdf_id"],
+                  {"colecao": rel["colecao"], "pontos": g["pontos"], "origem": "upload"},
+                  pedido.client.host if pedido.client else None)
+    return rel
+
+
+_CAPACIDADE: dict = {}
+
+
+@app.get("/api/vetorizacao/capacidade", tags=["vetorização"])
+def vet_capacidade(pedido: Request, refazer: bool = False):
+    """Este servidor consegue calcular embeddings? Sondado à parte e guardado
+    por uma hora: a sondagem importa torch, o que pode levar minutos."""
+    auth.exigir_usuario(pedido, sb)
+    import time
+    if refazer or not _CAPACIDADE or time.time() - _CAPACIDADE.get("_quando", 0) > 3600:
+        _CAPACIDADE.clear()
+        _CAPACIDADE.update(_vet().capacidade(), _quando=time.time())
+    return {k: v for k, v in _CAPACIDADE.items() if not k.startswith("_")}
+
+
+_TAREFAS: dict[str, dict] = {}
+
+
+@app.post("/api/vetorizacao/no-site", tags=["vetorização"])
+def vet_no_site(ped: PedidoPacote, pedido: Request):
+    """Vetoriza aqui mesmo, num processo à parte. Recusa se a CPU não aguenta."""
+    quem = auth.exigir_cargo(pedido, sb, "admin", "curador")
+    cap = vet_capacidade(pedido)
+    if not cap.get("pode"):
+        raise HTTPException(409, cap.get("motivo") or "este servidor não calcula embeddings")
+    import subprocess, sys, tempfile, threading, uuid as _uuid
+    tid = _uuid.uuid4().hex[:10]
+    _TAREFAS[tid] = {"estado": "montando pacote", "colecao": ped.colecao,
+                     "documentos": len(ped.ids), "por": quem["email"]}
+
+    def correr():
+        t = _TAREFAS[tid]
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                dados, resumo = _vet().montar_pacote(sb, ped.colecao, ped.ids, quem["email"])
+                zp = Path(tmp) / "pacote.zip"
+                zp.write_bytes(dados)
+                t["estado"] = "calculando embeddings"
+                r = subprocess.run([sys.executable, str(ROOT / "vetorizador" / "rodar_vetorizacao.py"),
+                                    str(zp)], env={**os.environ, "SB100_DIR": tmp},
+                                   capture_output=True, text=True, timeout=6 * 3600)
+                if r.returncode != 0:
+                    raise RuntimeError((r.stderr or r.stdout).strip().splitlines()[-1][:200])
+                saida = Path(tmp) / f"vet_{resumo['pacote']}" / "saida"
+                t["estado"] = "gravando no Qdrant"
+                t["resultado"] = _vet().importar_vetores(sb, saida, False, ped.colecao)
+                t["estado"] = "concluído"
+        except Exception as e:
+            t["estado"] = "falhou"
+            t["erro"] = str(e)[:300]
+
+    threading.Thread(target=correr, daemon=True).start()
+    return {"tarefa": tid, **_TAREFAS[tid]}
+
+
+@app.get("/api/vetorizacao/tarefa/{tid}", tags=["vetorização"])
+def vet_tarefa(tid: str, pedido: Request):
+    auth.exigir_usuario(pedido, sb)
+    if tid not in _TAREFAS:
+        raise HTTPException(404, "tarefa não encontrada (o servidor reiniciou?)")
+    return _TAREFAS[tid]
+
+
 @app.get("/api/curadoria/ultima", tags=["curadoria"])
 def curadoria_ultima(pedido: Request):
     """Quando foi a última sincronização e o que ela achou."""
