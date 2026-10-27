@@ -13,3 +13,6 @@ Pillow
 pandas
 huggingface_hub
 torch
+
+# sb100.py (linha de comando) conversa com o site por HTTP
+requests
