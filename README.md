@@ -181,8 +181,9 @@ site pela API. Pede o e-mail, a senha e a chave do Qdrant na hora (sem mostrar
 na tela) e entra de novo sozinho se o login vencer no meio de uma extração longa.
 
 ```bash
-git clone https://github.com/nicolasaws1/parser_rag_framework.git
-cd parser_rag_framework
+git clone --depth 1 --filter=blob:none --sparse https://github.com/CCDSB100/squad-2.git
+cd squad-2 && git sparse-checkout set 2026/parser_rag_framework
+cd 2026/parser_rag_framework
 pip install -r extractor/requirements.txt -r requirements-vetorizador.txt
 
 python sb100.py --site https://endereco-do-site extrair --quantos 10

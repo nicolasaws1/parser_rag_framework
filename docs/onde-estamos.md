@@ -10,7 +10,8 @@ Referência única do projeto. Atualizado em 2026-08-21.
 | Site (ZeroTier) | https://172.28.181.92 (avisa do certificado, é esperado) |
 | Servidor | `squad2@172.28.181.92`, pasta `~/parser_rag_framework` |
 | Banco | Supabase Cloud, projeto `yzxqpitsgwlbxmchlbxv` |
-| Repositório | github.com/nicolasaws1/parser_rag_framework (público) |
+| Repositório | github.com/CCDSB100/squad-2, pasta `2026/parser_rag_framework` (público): é de onde os notebooks e o site buscam o código |
+| Cópia de trabalho | github.com/nicolasaws1/parser_rag_framework: o servidor ainda faz `git pull` daqui; as duas ficam iguais |
 | Local | `C:\Users\nicol\OneDrive\Área de Trabalho\SB100\squad-2` |
 
 Dois contêineres: `api` (a aplicação) e `caddy` (HTTPS do acesso por ZeroTier).

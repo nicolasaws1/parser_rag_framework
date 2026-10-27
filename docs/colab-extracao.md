@@ -16,7 +16,10 @@ barra lateral), com estes nomes, e marque "Notebook access":
 from google.colab import userdata
 from pathlib import Path
 
-!git clone -q https://github.com/nicolasaws1/parser_rag_framework.git /content/repo
+# o repositório da organização tem outros projetos: baixa só a pasta do site (~1 MB)
+!git clone -q --depth 1 --filter=blob:none --sparse https://github.com/CCDSB100/squad-2.git /content/squad-2
+!git -C /content/squad-2 sparse-checkout set 2026/parser_rag_framework
+!mv /content/squad-2/2026/parser_rag_framework /content/repo && rm -rf /content/squad-2
 %cd /content/repo
 !pip install -q supabase python-dotenv pymupdf
 

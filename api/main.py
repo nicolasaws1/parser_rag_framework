@@ -619,8 +619,9 @@ def worker_estado(pedido: Request):
 # documento já extraído. Duplicata é recusada por padrão, porque regravar apaga
 # páginas e blocos de uma extração que pode ter sido curada à mão.
 
-NOTEBOOK_URL = ("https://raw.githubusercontent.com/nicolasaws1/parser_rag_framework/"
-                "main/extractor/extrator_lote.ipynb")
+# os dois notebooks vêm do repositório da organização, onde o site mora em 2026/parser_rag_framework
+REPO_RAW = "https://raw.githubusercontent.com/CCDSB100/squad-2/main/2026/parser_rag_framework/"
+NOTEBOOK_URL = REPO_RAW + "extractor/extrator_lote.ipynb"
 
 
 @app.get("/api/extracao/notebook", tags=["extração"])
@@ -784,8 +785,7 @@ def extracao_tarefa(tid: str, pedido: Request):
 # vetores, o site grava no Qdrant. A coleção é escolhida a cada passo, porque
 # "já vetorizado" só tem sentido dentro de uma coleção.
 
-VET_NOTEBOOK_URL = ("https://raw.githubusercontent.com/nicolasaws1/parser_rag_framework/"
-                    "main/vetorizador/vetorizador_lote.ipynb")
+VET_NOTEBOOK_URL = REPO_RAW + "vetorizador/vetorizador_lote.ipynb"
 
 
 class NovaColecao(BaseModel):

@@ -181,8 +181,9 @@ trabalho, que no Colab é `/content`:
 
 ```bash
 export SB100_DIR=/dados/sb100
-git clone https://github.com/nicolasaws1/parser_rag_framework.git
-cd parser_rag_framework && cp /caminho/do/.env .env
+git clone --depth 1 --filter=blob:none --sparse https://github.com/CCDSB100/squad-2.git
+cd squad-2 && git sparse-checkout set 2026/parser_rag_framework
+cd 2026/parser_rag_framework && cp /caminho/do/.env .env
 pip install -r requirements.txt
 python extractor/baixar_lote.py --quantos 10
 python extractor/extrator_chandra.py
