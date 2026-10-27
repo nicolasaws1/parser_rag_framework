@@ -599,7 +599,7 @@
     <div class="lista" id="eq-lista"></div>
   </div>
   <div class="home" id="view-gpu" style="display:none">
-    <div class="home-hero recolhido" id="hero-gpu" onclick="alternarHeroGpu()" title="Clique para expandir">
+    <div class="home-hero recolhido" id="hero-gpu" onclick="alternarHeroAba('gpu')" title="Clique para expandir">
       <div class="hero-topo">
         <h2>Extração</h2>
         <svg class="hero-seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -668,16 +668,22 @@
     </div>
   </div>
   <div class="home" id="view-vet" style="display:none">
-    <div class="home-hero">
-      <h2>Vetorização</h2>
-      <p>Fatia o texto extraído (1024 caracteres, 20% de sobreposição, tabelas e figuras inteiras) e grava os
+    <div class="home-hero recolhido" id="hero-vet" onclick="alternarHeroAba('vet')" title="Clique para expandir">
+      <div class="hero-topo">
+        <h2>Vetorização</h2>
+        <svg class="hero-seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="opacity:.75">
+          <polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <p class="hero-oculta">Fatia o texto extraído (1024 caracteres, 20% de sobreposição, tabelas e figuras inteiras) e grava os
          vetores no Qdrant. Cada coleção é um índice à parte: um documento pode estar numa e faltar em outra,
          então tudo aqui é sempre em relação à coleção escolhida.</p>
-      <div class="home-badges">
+      <div class="home-badges hero-oculta">
         <div class="home-badge"><div class="n" id="vet-badge-feitos">—</div><div class="l">Nesta coleção</div></div>
         <div class="home-badge"><div class="n" id="vet-badge-pontos">—</div><div class="l">Pontos na coleção</div></div>
         <div class="home-badge"><div class="n" id="vet-badge-cpu">—</div><div class="l">Este servidor</div></div>
       </div>
+      <div id="vet-resumo" class="hero-resumo"></div>
     </div>
 
     <div class="up-card">
@@ -1611,6 +1617,7 @@ function irVetorizacao(pre){
   el("view-gpu").style.display="none"; el("view-equipe").style.display="none";
   el("view-vet").style.display="block";
   el("topbar-tit").textContent="Vetorização"; setNav("vet");
+  aplicarHeroAba("vet");
   var pode=(CARGO!=="leitor");
   el("vet-acoes").style.display=pode?"block":"none";
   el("vet-nova").style.display=(CARGO==="admin")?"flex":"none";
@@ -1659,6 +1666,7 @@ async function vetCriarColecao(){
 async function vetCarregarDocs(){
   var c=VET_COLS.filter(function(x){ return x.nome===VET_COL; })[0];
   el("vet-badge-pontos").textContent=c?c.pontos.toLocaleString("pt-BR"):"—";
+  el("vet-badge-feitos").textContent="—"; vetResumoHero();
   el("vet-col-info").textContent=c?(c.teste?"coleção de teste":""):"";
   if(!VET_COL){ el("vet-docs").innerHTML='<div class="md-vazio">Nenhuma coleção compatível.</div>'; return; }
   el("vet-docs").innerHTML='<div class="md-vazio">Conferindo o que já está em '+esc(VET_COL)+'…</div>';
@@ -1678,6 +1686,7 @@ async function vetCarregarDocs(){
   }
   var feitos=VET_DOCS.filter(function(d){ return d.vetorizado; }).length;
   el("vet-badge-feitos").textContent=feitos+" de "+VET_DOCS.length;
+  vetResumoHero();
   el("uso-col").textContent=VET_COL;
   el("uso-txt").textContent=feitos+" de "+VET_DOCS.length+" extraídos nela";
   el("uso-barra").style.width=(VET_DOCS.length?Math.round(100*feitos/VET_DOCS.length):0)+"%";
@@ -1855,6 +1864,13 @@ async function vetConfirmar(){
   }catch(e){ b.disabled=false; b.textContent="Confirmar vetorização"; _vetMsg("Falhou ao confirmar: "+esc(e.message), true); }
 }
 var _VET_CAP=null;
+function vetResumoHero(){
+  var r=el("vet-resumo"); if(!r) return;
+  r.innerHTML='<span>coleção <b>'+esc(VET_COL||"—")+'</b></span>'+
+    '<span><b>'+esc(el("vet-badge-feitos").textContent)+'</b> extraídos nela</span>'+
+    '<span><b>'+esc(el("vet-badge-pontos").textContent)+'</b> pontos</span>'+
+    '<span>este servidor: <b>'+esc(el("vet-badge-cpu").textContent)+'</b></span>';
+}
 async function vetCapacidade(){
   var box=el("vet-cap");
   try{
@@ -1862,6 +1878,7 @@ async function vetCapacidade(){
     if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
     _VET_CAP=j;
     el("vet-badge-cpu").textContent=j.pode?"calcula":"só GPU";
+    vetResumoHero();
     box.innerHTML=j.pode
       ?'<span style="color:#1E5B31;font-weight:700">Disponível.</span> CPU com AVX'+(j.torch_cpu?' ('+esc(j.torch_cpu)+')':'')+'. Bem mais lento que GPU: use para poucos documentos.'
       :'<span style="color:#b42318;font-weight:700">Indisponível aqui.</span> '+esc((j.motivo||"").charAt(0).toUpperCase()+(j.motivo||"").slice(1));
@@ -1898,7 +1915,7 @@ async function vetNoSite(){
    A lista é a mesma da Home (IDX), filtrada para o que ainda não foi extraído.
    Os pedidos feitos na Home ("Solicitar extração") vêm de /api/fila, com quem
    pediu e quando; eles abrem a lista e já chegam marcados na primeira visita. */
-var EXT_SEL=new Set(), EXT_FILA={}, EXT_FILTRO="todos", EXT_MAX=50, EXT_PRE=false, HERO_GPU_ABERTO=false;
+var EXT_SEL=new Set(), EXT_FILA={}, EXT_FILTRO="todos", EXT_MAX=50, EXT_PRE=false, HERO_ABAS={gpu:false, vet:false};
 var SEG_POR_PAGINA=17;   // medido numa L4 com o Chandra (extractor/README.md)
 function irExtracaoGPU(){
   el("view-home").style.display="none"; el("view-extract").style.display="none"; el("view-equipe").style.display="none"; el("view-vet").style.display="none";
@@ -1906,17 +1923,18 @@ function irExtracaoGPU(){
   var pode=(CARGO!=="leitor");
   ["up-card","ext-escolha"].forEach(function(id){ var c=el(id); if(c) c.style.display=pode?"block":"none"; });
   el("topbar-tit").textContent="Extração"; setNav("gpu");
-  aplicarHeroGpu();
+  aplicarHeroAba("gpu");
   extCarregar();
 }
-function alternarHeroGpu(){
-  HERO_GPU_ABERTO=!HERO_GPU_ABERTO; aplicarHeroGpu();
-  try{ sessionStorage.setItem("sb100_hero_gpu", HERO_GPU_ABERTO?"1":"0"); }catch(_){}
+/* cabeçalho das abas Extração e Vetorização: recolhe como o da Home e lembra na sessão */
+function alternarHeroAba(k){
+  HERO_ABAS[k]=!HERO_ABAS[k]; aplicarHeroAba(k);
+  try{ sessionStorage.setItem("sb100_hero_"+k, HERO_ABAS[k]?"1":"0"); }catch(_){}
 }
-function aplicarHeroGpu(){
-  var h=el("hero-gpu"); if(!h) return;
-  h.classList.toggle("recolhido", !HERO_GPU_ABERTO);
-  h.title = HERO_GPU_ABERTO ? "Clique para recolher" : "Clique para expandir";
+function aplicarHeroAba(k){
+  var h=el("hero-"+k); if(!h) return;
+  h.classList.toggle("recolhido", !HERO_ABAS[k]);
+  h.title = HERO_ABAS[k] ? "Clique para recolher" : "Clique para expandir";
 }
 function _horas(seg){ var m=Math.round(seg/60); return m<60? "~"+Math.max(1,m)+" min" : "~"+(m/60).toFixed(m<600?1:0).replace(".",",")+" h"; }
 function _ha(iso){
@@ -2741,7 +2759,7 @@ function vetorizar(){
 montarFiltros(); montarSituacoes();
 try{
   HERO_ABERTO = sessionStorage.getItem("sb100_hero") === "1";
-  HERO_GPU_ABERTO = sessionStorage.getItem("sb100_hero_gpu") === "1";
+  ["gpu","vet"].forEach(function(k){ HERO_ABAS[k] = sessionStorage.getItem("sb100_hero_"+k) === "1"; });
   var _pp = sessionStorage.getItem("sb100_pp");
   if(_pp !== null){ POR_PAGINA = parseInt(_pp,10)||0; MOSTRANDO = POR_PAGINA || 1e9;
     var _s = el("por-pagina"); if(_s) _s.value = String(POR_PAGINA); }
