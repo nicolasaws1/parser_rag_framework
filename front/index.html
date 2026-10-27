@@ -45,6 +45,10 @@
   .home-hero.recolhido #hero-desc,.home-hero.recolhido #hero-badges{display:none;}
   .home-hero.recolhido #hero-seta{transform:rotate(-90deg);}
   .home-hero.recolhido h2{font-size:16px;margin:0;}
+  .home-hero.recolhido .hero-oculta{display:none;}
+  .home-hero.recolhido .hero-seta{transform:rotate(-90deg);}
+  .up-st.solicitado{background:#fef3c7;color:#92400e;}
+  .lote-qtd{width:52px;padding:5px 6px;border:1px solid var(--borda);border-radius:7px;font-family:inherit;font-size:12.5px;}
   .hero-resumo{display:none;gap:18px;flex-wrap:wrap;font-size:13px;opacity:.95;margin-top:9px;}
   .home-hero.recolhido .hero-resumo{display:flex;}
   .hero-resumo b{font-size:15px;}
@@ -595,14 +599,41 @@
     <div class="lista" id="eq-lista"></div>
   </div>
   <div class="home" id="view-gpu" style="display:none">
-    <div class="home-hero">
-      <h2>Extração</h2>
-      <p>A extração roda onde há GPU: no Colab, ou num servidor com placa. Este site não extrai.
-         Ele guarda a fila, recebe o estado de quem extrai, e aceita o resultado pronto por upload.</p>
-      <div class="home-badges">
-        <div class="home-badge"><div class="n" id="gpu-badge-estado">—</div><div class="l">Worker de extração</div></div>
-        <div class="home-badge"><div class="n" id="gpu-badge-fila">0</div><div class="l">Na fila</div></div>
-        <div class="home-badge"><div class="n" id="gpu-badge-sinal">—</div><div class="l">Último sinal</div></div>
+    <div class="home-hero recolhido" id="hero-gpu" onclick="alternarHeroGpu()" title="Clique para expandir">
+      <div class="hero-topo">
+        <h2>Extração</h2>
+        <svg class="hero-seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="opacity:.75">
+          <polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <p class="hero-oculta">A extração roda onde há GPU: no Colab, ou num servidor com placa. Este site não extrai:
+         você escolhe os PDFs, leva o lote para a GPU e envia o resultado de volta.</p>
+      <div class="home-badges hero-oculta">
+        <div class="home-badge"><div class="n" id="gpu-b-pend">—</div><div class="l">PDFs a extrair</div></div>
+        <div class="home-badge"><div class="n" id="gpu-b-pags">—</div><div class="l" id="gpu-b-pags-l">Páginas a extrair</div></div>
+        <div class="home-badge"><div class="n" id="gpu-b-sol">—</div><div class="l">Solicitados na Home</div></div>
+        <div class="home-badge"><div class="n" id="gpu-b-ult">—</div><div class="l" id="gpu-b-ult-l">Última extração gravada</div></div>
+      </div>
+      <div id="gpu-resumo" class="hero-resumo"></div>
+    </div>
+    <div class="up-card" id="ext-escolha">
+      <h3>Escolha os PDFs</h3>
+      <div class="up-sub">Só os que ainda não foram extraídos. Os pedidos na Home com <b>Solicitar extração</b> aparecem
+        primeiro e já vêm marcados. Até 50 por lote.</div>
+      <div class="vet-barra">
+        <button class="filtro" id="ef-sol" onclick="extFiltro('sol')">Solicitados</button>
+        <button class="filtro ativo" id="ef-todos" onclick="extFiltro('todos')">Todos a extrair</button>
+        <input id="ext-busca" placeholder="buscar título ou arquivo" oninput="extRender()" style="flex:1;min-width:160px">
+      </div>
+      <div class="vet-tab-wrap" id="ext-docs"><div class="md-vazio">Carregando…</div></div>
+      <div class="up-acoes" style="justify-content:space-between">
+        <span id="ext-sel-info" style="font-size:12.5px">Nenhum selecionado</span>
+        <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="display:flex;align-items:center;gap:6px">Marcar os
+            <input id="lote-qtd" class="lote-qtd" type="number" min="1" max="50" value="5"> menores
+            <button class="up-btn sec" onclick="extMenores()">Marcar</button></span>
+          <button class="up-btn sec" onclick="extLimparSel()">Limpar seleção</button>
+        </span>
       </div>
     </div>
     <div class="up-card" id="up-card">
@@ -611,17 +642,11 @@
         banco: ele recebe um lote por aqui e devolve o resultado por aqui. O site confere o pacote inteiro antes de
         gravar, e documento que já foi extraído não é sobrescrito sem você pedir.</div>
       <div class="up-passos">
-        <div class="up-passo"><b>1. BAIXE UM LOTE</b>
-          PDFs ainda não extraídos, com os metadados da curadoria.
-          <div style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap">
-            <input id="lote-qtd" type="number" min="1" max="50" value="5"
-                   style="width:58px;padding:5px 6px;border:1px solid var(--borda);border-radius:7px;font-family:inherit;font-size:12.5px">
-            <label style="display:flex;align-items:center;gap:4px;font-size:11.5px;cursor:pointer">
-              <input type="checkbox" id="lote-menores" checked> menores antes</label>
-          </div>
-          <button class="up-btn" id="btn-lote" onclick="baixarLote()" style="margin-top:8px">
+        <div class="up-passo"><b>1. BAIXE O LOTE</b>
+          Os PDFs marcados acima, com os metadados da curadoria.
+          <button class="up-btn" id="btn-lote" onclick="baixarLote()" style="margin-top:8px" disabled>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Baixar lote</button>
+            <span id="btn-lote-txt">Baixar lote</span></button>
           <div id="lote-info" style="font-size:11.5px;color:var(--cinza);margin-top:6px"></div></div>
         <div class="up-passo"><b>2. BAIXE O NOTEBOOK</b>
           Abra no Colab (com <b style="display:inline;color:inherit">GPU</b>) ou no Jupyter do servidor.
@@ -641,10 +666,6 @@
       </div>
       <div id="up-resultado"></div>
     </div>
-    <div class="lista-topo">
-      <div class="filtros"><span class="filtro-lbl">Worker:</span><span id="gpu-detalhe" style="font-size:12.5px;color:var(--cinza)"></span></div>
-    </div>
-    <div class="lista" id="gpu-fila"></div>
   </div>
   <div class="home" id="view-vet" style="display:none">
     <div class="home-hero">
@@ -817,6 +838,9 @@ const API = "/api";
 
 /* --- adaptadores: formato da API (colunas em inglês) -> formato do front --- */
 function _slugDe(f){ return String(f||"").replace(/\.pdf$/i,""); }
+/* extracted_at é "timestamp" sem fuso e o servidor grava em UTC; sem o Z o
+   navegador leria como horário de Brasília, 3 h adiantado */
+function _utc(iso){ return !iso ? null : (/(Z|[+-]\d\d:?\d\d)$/i.test(iso) ? iso : iso+"Z"); }
 function _meta(m){
   m = m || {};
   return { titulo:m.title||"(sem título)", autores:m.authors||"—", ano:m.year||"—",
@@ -845,7 +869,7 @@ async function carregarDocumentos(){
     n_paginas:d.total_pages||0, meta:_meta(d.meta), thumb:d.thumbnail||"",
     resumo:d.resumo||{tabelas:0,figuras:0,formulas:0},
     aprovado:d.approved, extraido:d.extracted, vetorizado:d.vectorized,
-    criado_em:d.created_at||null, extraido_em:d.extracted_at||null,
+    criado_em:d.created_at||null, extraido_em:_utc(d.extracted_at),
     na_fila:!!d.extraction_requested_at
   }));
   // o painel mostrava "0 EXTRAIDOS" mesmo com tudo extraido: os conjuntos
@@ -1052,8 +1076,8 @@ function mostrarNaoExtraido(d, i){
     (d.n_paginas||0)+' páginas · aprovado pela Squad 1</div>'+
     (fila
       ? '<div style="margin-top:16px;padding:12px 14px;background:#fef3c7;border:1px solid #fde68a;border-radius:9px;font-size:12.5px;color:#92400e">'+
-        '<b>Na fila de extração.</b> O lado com GPU consulta a fila e processa; '+
-        'o documento aparece extraído quando o resultado for ingerido.</div>'
+        '<b>Extração solicitada.</b> Ele aparece marcado na aba <b>Extração</b>, pronto para ir no próximo lote; '+
+        'fica como extraído quando o resultado for enviado.</div>'
       : '')+
     '<button onclick="pedirExtracao('+i+')" id="btn-extrair-um" '+
     'style="margin-top:16px;width:100%;padding:11px;border:none;border-radius:10px;'+
@@ -1155,10 +1179,9 @@ async function analisarSelecionados(){
   abrirPainel("Extração solicitada",
     '<p style="font-size:13px;line-height:1.6">'+esc(msg||"Nada a fazer.")+'</p>'+
     '<div style="margin-top:12px;padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;font-size:12px;color:#7c2d12">'+
-    '<b>Este servidor não extrai.</b> A extração precisa de GPU e roda no notebook '+
-    '(DocLayout-YOLO + Chandra OCR 2 + Docling + PyMuPDF). O que ficou registrado é o '+
-    '<i>pedido</i>: o lado GPU consulta <code>/api/fila</code> para saber o que processar, '+
-    'e o documento aparece como extraído quando o resultado for ingerido.</div>');
+    '<b>Este servidor não extrai.</b> O que ficou registrado é o <i>pedido</i>: os documentos aparecem '+
+    'marcados na aba Extração, de onde sai o lote para o notebook com GPU.</div>'+
+    '<button class="up-btn" style="margin-top:12px" onclick="fecharPainel();irExtracaoGPU()">Ir para a aba Extração</button>');
 }
 function analisarUm(i){
   return new Promise(res=>{
@@ -1442,11 +1465,12 @@ function _upEnviando(f, depois, t0){
   };
 }
 async function baixarLote(){
-  var b=el("btn-lote"), q=parseInt(el("lote-qtd").value||"5",10)||5;
-  var men=el("lote-menores").checked;
+  var ids=extSelecionados().map(function(d){ return d.id; });
+  if(!ids.length || ids.length>EXT_MAX) return;
+  var b=el("btn-lote");
   b.disabled=true; el("lote-info").textContent="Montando o lote…";
   try{
-    var r=await apiFetch(API+"/extracao/lote?quantos="+q+"&menores="+(men?"true":"false"));
+    var r=await apiFetch(API+"/extracao/lote?quantos="+ids.length+"&ids="+ids.join(","));
     if(!r.ok) throw new Error((await r.json().catch(function(){return {};})).detail||("HTTP "+r.status));
     var nome=((r.headers.get("Content-Disposition")||"").match(/filename="([^"]+)"/)||[])[1]||"lote.zip";
     var docs=r.headers.get("X-Lote-Documentos"), pags=r.headers.get("X-Lote-Paginas");
@@ -1456,7 +1480,7 @@ async function baixarLote(){
     el("lote-info").innerHTML="<b>"+esc(nome)+"</b><br>"+docs+" documento(s), "+pags+" páginas, ~"+
       Math.max(1,Math.round(pags*17/60))+" min de GPU";
   }catch(e){ el("lote-info").textContent="Falhou: "+e.message; }
-  b.disabled=false;
+  extSelInfo();
 }
 async function baixarNotebook(){
   try{
@@ -1537,7 +1561,7 @@ async function upGravar(){
       '<div style="margin-top:16px;font-size:13px"><b>'+(j.gravados||[]).length+' gravado(s)</b>, '+
       (j.pulados||[]).length+' pulado(s), '+(j.falhas||[]).length+' com problema.</div>'+_upTabela(linhas);
     _upArq=null;
-    if((j.gravados||[]).length) carregarDocumentos();
+    if((j.gravados||[]).length) carregarDocumentos().then(extRender);
   }catch(e){
     _upTravar(false); _upArq=null;
     _upMsg("Falhou ao gravar: "+esc(e.message)+"<br>Confira na Home o que chegou a entrar e, se faltar algo, envie o zip de novo.", true);
@@ -1870,43 +1894,138 @@ async function vetNoSite(){
   ["dragleave","drop"].forEach(function(ev){ z.addEventListener(ev,function(e){ e.preventDefault(); z.classList.remove("sobre"); }); });
   z.addEventListener("drop",function(e){ var f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(f) vetEscolher(f); });
 })();
-var _tGpu=null;
+/* ── aba Extração: escolher o que vai no lote ──
+   A lista é a mesma da Home (IDX), filtrada para o que ainda não foi extraído.
+   Os pedidos feitos na Home ("Solicitar extração") vêm de /api/fila, com quem
+   pediu e quando; eles abrem a lista e já chegam marcados na primeira visita. */
+var EXT_SEL=new Set(), EXT_FILA={}, EXT_FILTRO="todos", EXT_MAX=50, EXT_PRE=false, HERO_GPU_ABERTO=false;
+var SEG_POR_PAGINA=17;   // medido numa L4 com o Chandra (extractor/README.md)
 function irExtracaoGPU(){
   el("view-home").style.display="none"; el("view-extract").style.display="none"; el("view-equipe").style.display="none"; el("view-vet").style.display="none";
   el("view-gpu").style.display="block";
-  var uc=el("up-card"); if(uc) uc.style.display=(CARGO==="leitor")?"none":"block";
+  var pode=(CARGO!=="leitor");
+  ["up-card","ext-escolha"].forEach(function(id){ var c=el(id); if(c) c.style.display=pode?"block":"none"; });
   el("topbar-tit").textContent="Extração"; setNav("gpu");
-  atualizarGPU();
-  clearInterval(_tGpu); _tGpu=setInterval(atualizarGPU, 15000);   // heartbeat e' periodico
+  aplicarHeroGpu();
+  extCarregar();
 }
-function _card(tit, corpo, cor){
-  return '<div style="background:#fff;border:1px solid var(--borda);border-left:4px solid '+cor+
-         ';border-radius:12px;padding:16px 18px"><div style="font-size:11px;font-weight:700;'+
-         'letter-spacing:.6px;text-transform:uppercase;color:var(--cinza);margin-bottom:8px">'+tit+
-         '</div>'+corpo+'</div>';
+function alternarHeroGpu(){
+  HERO_GPU_ABERTO=!HERO_GPU_ABERTO; aplicarHeroGpu();
+  try{ sessionStorage.setItem("sb100_hero_gpu", HERO_GPU_ABERTO?"1":"0"); }catch(_){}
 }
-async function atualizarGPU(){
-  if(el("view-gpu").style.display==="none"){ clearInterval(_tGpu); return; }
-  var w={conectado:false}, fila=[];
-  try{ w=await (await apiFetch(API+"/worker")).json(); }catch(e){ w={conectado:false,motivo:e.message}; }
-  try{ fila=await (await apiFetch(API+"/fila")).json(); }catch(e){ fila=[]; }
-  var est=w.estado||{};
-  el("gpu-badge-estado").textContent = w.conectado ? (est.rodando?"Extraindo":"Ocioso") : "Offline";
-  el("gpu-badge-fila").textContent   = fila.length;
-  el("gpu-badge-sinal").textContent  = w.conectado ? (w.segundos_desde||0)+"s" : "—";
-  el("gpu-detalhe").innerHTML = w.conectado
-    ? esc([est.gpu, est.documento && String(est.documento).slice(0,38),
-           est.pagina && ("página "+est.pagina+(est.total_paginas?" de "+est.total_paginas:""))]
-          .filter(Boolean).join(" · "))
-    : esc(w.motivo||"nenhum sinal nos últimos 3 minutos")+" — o script de extração não está reportando.";
-  el("gpu-fila").innerHTML = fila.length
-    ? fila.map(function(x){ return ''+
-        '<div class="linha"><div class="linha-doc" style="padding-left:14px">'+
-        '<div class="linha-tit">'+esc(x.pdf_file)+'</div>'+
-        '<div class="linha-meta">'+(x.total_pages||0)+' páginas · pedido em '+_quando(x.extraction_requested_at)+
-        ' · por <b>'+esc(x.extraction_requested_by||"—")+'</b></div></div>'+
-        '<div style="padding-right:16px"><span class="mini-chip fila">na fila</span></div></div>'; }).join("")
-    : '<div class="md-vazio">Nada na fila. Peça a extração de um documento na Home ou ao abri-lo.</div>';
+function aplicarHeroGpu(){
+  var h=el("hero-gpu"); if(!h) return;
+  h.classList.toggle("recolhido", !HERO_GPU_ABERTO);
+  h.title = HERO_GPU_ABERTO ? "Clique para recolher" : "Clique para expandir";
+}
+function _horas(seg){ var m=Math.round(seg/60); return m<60? "~"+Math.max(1,m)+" min" : "~"+(m/60).toFixed(m<600?1:0).replace(".",",")+" h"; }
+function _ha(iso){
+  if(!iso) return "—";
+  var m=Math.round((Date.now()-new Date(iso).getTime())/60000);
+  if(m<60) return "há "+Math.max(1,m)+" min";
+  if(m<48*60) return "há "+Math.round(m/60)+" h";
+  return "há "+Math.round(m/1440)+" dias";
+}
+async function extCarregar(){
+  try{ await carregarDocumentos(); }catch(e){
+    el("ext-docs").innerHTML='<div class="md-vazio">Não deu para carregar os documentos: '+esc(e.message)+'</div>'; return; }
+  EXT_FILA={};
+  try{
+    var r=await apiFetch(API+"/fila");
+    if(r.ok) (await r.json()).forEach(function(x){ EXT_FILA[x.id]=x; });
+  }catch(_){}
+  var sol=extPendentes().filter(function(d){ return EXT_FILA[d.id]; });
+  if(!EXT_PRE){
+    EXT_PRE=true;
+    sol.slice(0,EXT_MAX).forEach(function(d){ EXT_SEL.add(d.id); });
+    if(sol.length) EXT_FILTRO="sol";
+  }
+  extResumo();
+  extFiltro(EXT_FILTRO);
+}
+/* pendentes: solicitados primeiro (o pedido mais antigo antes), depois os menores */
+function extPendentes(){
+  return IDX.filter(function(d){ return !d.extraido; }).sort(function(a,b){
+    var fa=EXT_FILA[a.id], fb=EXT_FILA[b.id];
+    if(!!fa!==!!fb) return fa?-1:1;
+    if(fa&&fb) return String(fa.extraction_requested_at).localeCompare(String(fb.extraction_requested_at));
+    return (a.n_paginas||1e6)-(b.n_paginas||1e6);
+  });
+}
+function extSelecionados(){ return extPendentes().filter(function(d){ return EXT_SEL.has(d.id); }); }
+function extResumo(){
+  var pend=extPendentes(), pags=pend.reduce(function(a,d){ return a+(d.n_paginas||0); },0);
+  var nSol=pend.filter(function(d){ return EXT_FILA[d.id]; }).length;
+  var ult=IDX.reduce(function(a,d){ return d.extraido_em && (!a || d.extraido_em>a) ? d.extraido_em : a; }, null);
+  el("gpu-b-pend").textContent=pend.length;
+  el("gpu-b-pags").textContent=pags.toLocaleString("pt-BR");
+  el("gpu-b-pags-l").textContent="Páginas a extrair ("+_horas(pags*SEG_POR_PAGINA)+" de GPU)";
+  el("gpu-b-sol").textContent=nSol;
+  el("gpu-b-ult").textContent=_ha(ult);
+  el("gpu-b-ult-l").textContent="Última extração gravada"+(ult?" ("+_quando(ult)+")":"");
+  el("gpu-resumo").innerHTML='<span><b>'+pend.length+'</b> PDFs a extrair</span>'+
+    '<span><b>'+pags.toLocaleString("pt-BR")+'</b> páginas ('+_horas(pags*SEG_POR_PAGINA)+' de GPU)</span>'+
+    '<span><b>'+nSol+'</b> solicitados na Home</span>'+
+    '<span>última extração <b>'+_ha(ult)+'</b></span>';
+  el("ef-sol").textContent="Solicitados ("+nSol+")";
+  el("ef-todos").textContent="Todos a extrair ("+pend.length+")";
+}
+function extFiltro(f){
+  EXT_FILTRO=f;
+  ["sol","todos"].forEach(function(k){ el("ef-"+k).classList.toggle("ativo",k===f); });
+  extRender();
+}
+function extVisiveis(){
+  var q=(el("ext-busca").value||"").toLowerCase();
+  return extPendentes().filter(function(d){
+    if(EXT_FILTRO==="sol" && !EXT_FILA[d.id]) return false;
+    return !q || (((d.meta&&d.meta.titulo)||"")+" "+d.arquivo).toLowerCase().indexOf(q)>=0;
+  });
+}
+function extRender(){
+  if(el("view-gpu").style.display==="none") return;
+  extResumo();
+  var v=extVisiveis();
+  if(!v.length){
+    el("ext-docs").innerHTML='<div class="md-vazio">'+(EXT_FILTRO==="sol"
+      ? 'Nenhum pedido em aberto. Na Home, abra um documento e clique em <b>Solicitar extração</b>, ou escolha em "Todos a extrair".'
+      : (el("ext-busca").value ? 'Nada com essa busca.' : 'Todos os documentos já foram extraídos.'))+'</div>';
+    extSelInfo(); return;
+  }
+  var todos=v.every(function(d){ return EXT_SEL.has(d.id); });
+  el("ext-docs").innerHTML='<table class="up-tab"><thead><tr><th style="width:28px"><input type="checkbox" '+(todos?'checked ':'')+
+    'onclick="extTodos(this.checked)" title="marcar os visíveis"></th><th>Documento</th><th>Ano</th><th>Pág.</th><th>Situação</th></tr></thead><tbody>'+
+    v.map(function(d){
+      var f=EXT_FILA[d.id];
+      return '<tr><td><input type="checkbox" data-id="'+esc(d.id)+'" '+(EXT_SEL.has(d.id)?'checked ':'')+'onclick="extSel(this)"></td>'+
+        '<td><div style="font-weight:600">'+esc(((d.meta&&d.meta.titulo)||d.arquivo).slice(0,110))+'</div>'+
+        '<div style="color:var(--cinza);font-size:11.5px">'+esc(d.arquivo)+'</div></td>'+
+        '<td>'+esc((d.meta&&d.meta.ano)||"—")+'</td><td>'+(d.n_paginas||"—")+'</td>'+
+        '<td>'+(f ? '<span class="up-st solicitado">solicitado</span><div style="color:var(--cinza);font-size:11.5px;margin-top:3px">por '+
+                    esc(f.extraction_requested_by||"—")+', '+_quando(f.extraction_requested_at)+'</div>'
+                  : '<span class="up-st nao">a extrair</span>')+'</td></tr>';
+    }).join("")+'</tbody></table>';
+  extSelInfo();
+}
+function extSel(cb){ var id=cb.getAttribute("data-id"); if(cb.checked) EXT_SEL.add(id); else EXT_SEL.delete(id); extSelInfo(); }
+function extTodos(on){ extVisiveis().forEach(function(d){ if(on) EXT_SEL.add(d.id); else EXT_SEL.delete(d.id); }); extRender(); }
+function extLimparSel(){ EXT_SEL.clear(); extRender(); }
+/* o antigo "lote de N, menores antes", agora como atalho de seleção */
+function extMenores(){
+  var n=Math.max(1, Math.min(EXT_MAX, parseInt(el("lote-qtd").value||"5",10)||5));
+  EXT_SEL.clear();
+  extPendentes().slice().sort(function(a,b){ return (a.n_paginas||1e6)-(b.n_paginas||1e6); })
+    .slice(0,n).forEach(function(d){ EXT_SEL.add(d.id); });
+  extFiltro("todos");
+}
+function extSelInfo(){
+  var sel=extSelecionados(), n=sel.length;
+  var pags=sel.reduce(function(a,d){ return a+(d.n_paginas||0); },0);
+  el("ext-sel-info").innerHTML = !n ? "Nenhum selecionado" :
+    '<b>'+n+'</b> selecionado(s), '+pags+' páginas, '+_horas(pags*SEG_POR_PAGINA)+' de GPU'+
+    (n>EXT_MAX ? ' <span style="color:#b42318">máximo de '+EXT_MAX+' por lote</span>' : '');
+  var b=el("btn-lote"); if(b) b.disabled = !n || n>EXT_MAX;
+  var t=el("btn-lote-txt"); if(t) t.textContent = n ? "Baixar lote ("+n+")" : "Baixar lote";
 }
 
 /* ── curadoria (Squad 1) ──
@@ -2622,6 +2741,7 @@ function vetorizar(){
 montarFiltros(); montarSituacoes();
 try{
   HERO_ABERTO = sessionStorage.getItem("sb100_hero") === "1";
+  HERO_GPU_ABERTO = sessionStorage.getItem("sb100_hero_gpu") === "1";
   var _pp = sessionStorage.getItem("sb100_pp");
   if(_pp !== null){ POR_PAGINA = parseInt(_pp,10)||0; MOSTRANDO = POR_PAGINA || 1e9;
     var _s = el("por-pagina"); if(_s) _s.value = String(POR_PAGINA); }
