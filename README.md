@@ -120,6 +120,7 @@ scripts/                     operação do acervo e do banco
 supabase/                    migrações SQL, em ordem (001 a 007, incluindo RLS)
 deploy/                      Caddyfiles do HTTPS (certificado interno e de origem)
 docs/                        relatório técnico, deploy e notas de pesquisa
+sb100.py                     extração e vetorização pela linha de comando, num servidor só com terminal
 Dockerfile, docker-compose.yml
 ```
 
@@ -172,6 +173,27 @@ Detalhes em [`vetorizador/README.md`](vetorizador/README.md).
 pip install -r requirements-vetorizador.txt
 QDRANT_API_KEY=... python vetorizador/rodar_vetorizacao.py pacote_….zip --enviar
 ```
+
+### Servidor só com terminal (bash ou cmd)
+
+`sb100.py` faz o caminho inteiro de cada aba com um comando, conversando com o
+site pela API. Pede o e-mail, a senha e a chave do Qdrant na hora (sem mostrar
+na tela) e entra de novo sozinho se o login vencer no meio de uma extração longa.
+
+```bash
+git clone https://github.com/nicolasaws1/parser_rag_framework.git
+cd parser_rag_framework
+pip install -r extractor/requirements.txt -r requirements-vetorizador.txt
+
+python sb100.py --site https://endereco-do-site extrair --quantos 10
+python sb100.py --site https://endereco-do-site vetorizar --colecao sb100 --quantos 50
+```
+
+`extrair` baixa um lote de PDFs ainda não extraídos, roda o extrator e envia o
+resultado; os documentos aparecem na Home como extraídos. `vetorizar` pega os
+extraídos que faltam na coleção, grava os vetores direto no Qdrant e confirma no
+site. Sem acesso ao Qdrant na máquina, `--via-site` manda o zip para o site gravar.
+Opções: `python sb100.py extrair -h` e `python sb100.py vetorizar -h`.
 
 ## API
 

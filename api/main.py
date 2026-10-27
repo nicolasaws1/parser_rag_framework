@@ -765,6 +765,8 @@ def _qdrant_ou_502(f, *a, **k):
     try:
         return f(*a, **k)
     except (RuntimeError, OSError) as e:
+        if "Qdrant 404" in str(e):
+            raise HTTPException(404, "essa coleção não existe no Qdrant")
         raise HTTPException(502, f"Qdrant indisponível: {e}")
 
 
