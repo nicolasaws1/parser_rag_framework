@@ -716,26 +716,67 @@ def extracao_conferir(pedido: Request, arquivo: UploadFile = File(...)):
 
 @app.post("/api/extracao/upload", tags=["extração"])
 def extracao_upload(pedido: Request, arquivo: UploadFile = File(...),
-                    substituir: bool = Form(False)):
-    """Confere e grava. Já extraído só é regravado com `substituir=true`."""
+                    substituir: bool = Form(False), acompanhar: bool = Form(False)):
+    """Confere e grava. Já extraído só é regravado com `substituir=true`.
+
+    Com `acompanhar=true` (a tela usa assim), responde na hora com o id de uma
+    tarefa e grava em segundo plano; o andamento sai em /api/extracao/tarefa/{id}.
+    Sem ele, espera gravar tudo e devolve o relatório (o sb100.py usa assim).
+    """
     quem = auth.exigir_cargo(pedido, sb, "admin", "curador")
     limitar(pedido, "edicao", "upload-extracao")
-    import tempfile
+    import shutil, tempfile, threading, uuid as _uuid
     from api import extracao
     dados = _receber_pacote(arquivo)
-    with tempfile.TemporaryDirectory() as tmp:
+    ip = pedido.client.host if pedido.client else None
+    tmp = tempfile.mkdtemp()
+    try:
+        pasta = extracao.abrir_pacote(dados, Path(tmp))
+    except ValueError as e:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise HTTPException(422, str(e))
+
+    def gravar(avisar=lambda **_: None) -> dict:
         try:
-            pasta = extracao.abrir_pacote(dados, Path(tmp))
-            rel = extracao.processar(sb, pasta, substituir=substituir)
+            rel = extracao.processar(sb, pasta, substituir=substituir, avisar=avisar)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+        for g in rel["gravados"]:
+            registrar("pdf_ingerido", quem["email"], g.get("pdf_id"),
+                      {"origem": "upload", "arquivo": arquivo.filename,
+                       "paginas": g.get("paginas"), "blocos": g.get("blocos"),
+                       "substituiu": g.get("situacao") == "ja_extraido"}, ip)
+        return rel
+
+    if not acompanhar:
+        try:
+            return gravar()
         except ValueError as e:
             raise HTTPException(422, str(e))
-    for g in rel["gravados"]:
-        registrar("pdf_ingerido", quem["email"], g.get("pdf_id"),
-                  {"origem": "upload", "arquivo": arquivo.filename,
-                   "paginas": g.get("paginas"), "blocos": g.get("blocos"),
-                   "substituiu": g.get("situacao") == "ja_extraido"},
-                  pedido.client.host if pedido.client else None)
-    return rel
+
+    tid = _uuid.uuid4().hex[:10]
+    _TAREFAS[tid] = {"estado": "gravando", "por": quem["email"], "documento": 0,
+                     "documentos": 0, "arquivo": "", "etapa": "conferindo", "feito": 0, "total": 0}
+
+    def correr():
+        t = _TAREFAS[tid]
+        try:
+            t["resultado"] = gravar(lambda **campos: t.update(campos))
+            t["estado"] = "concluído"
+        except Exception as e:
+            t["estado"] = "falhou"
+            t["erro"] = str(e)[:300]
+
+    threading.Thread(target=correr, daemon=True).start()
+    return {"tarefa": tid, **_TAREFAS[tid]}
+
+
+@app.get("/api/extracao/tarefa/{tid}", tags=["extração"])
+def extracao_tarefa(tid: str, pedido: Request):
+    auth.exigir_usuario(pedido, sb)
+    if tid not in _TAREFAS:
+        raise HTTPException(404, "tarefa não encontrada (o servidor reiniciou?)")
+    return _TAREFAS[tid]
 
 
 # ── vetorização ──────────────────────────────────────────────────────────────

@@ -226,7 +226,11 @@ def conferir(sb, pasta: Path) -> list[dict]:
 
 # ───────────────────────────── gravar ───────────────────────────────────────
 
-def ingerir_um(sb, pasta: Path, slug: str, pdf_id: str) -> dict:
+def _nada(**_):
+    pass
+
+
+def ingerir_um(sb, pasta: Path, slug: str, pdf_id: str, avisar=_nada) -> dict:
     """Atualiza o documento no lugar. Não encosta em `article_metadata`.
 
     Apagar e recriar a linha de `pdfs` levaria junto, por cascata, os metadados
@@ -251,7 +255,8 @@ def ingerir_um(sb, pasta: Path, slug: str, pdf_id: str) -> dict:
     sb.table("page_images").delete().eq("pdf_id", pdf_id).execute()
 
     imgs = []
-    for pg in paginas:
+    for k, pg in enumerate(paginas, 1):
+        avisar(etapa="imagens das páginas", feito=k, total=len(paginas))
         local = pasta / slug / pg["img"]
         remoto = f"{slug}/{pg['img']}"
         if local.exists():
@@ -268,6 +273,7 @@ def ingerir_um(sb, pasta: Path, slug: str, pdf_id: str) -> dict:
                "markdown_text": limpar(b.get("md")), "bbox": b.get("bbox"),
                "layout": limpar(b)}
               for pg in paginas for b in pg.get("blocos", [])]
+    avisar(etapa="blocos de texto", feito=0, total=len(blocos))
     for i in range(0, len(blocos), 500):
         sb.table("page_blocks").insert(blocos[i:i + 500]).execute()
 
@@ -301,7 +307,8 @@ def recortar(pagina: fitz.Page, bbox: list[float]) -> bytes:
     return buf.getvalue()
 
 
-def gerar_figuras(sb, pdf_id: str, pdf_file: str, refazer: bool = False) -> int:
+def gerar_figuras(sb, pdf_id: str, pdf_file: str, refazer: bool = False,
+                  avisar=_nada) -> int:
     """Recorta cada figura do PDF do bucket, pela bbox do próprio banco.
 
     Não vem da pasta da extração de propósito: a numeração dos blocos muda entre
@@ -323,7 +330,8 @@ def gerar_figuras(sb, pdf_id: str, pdf_file: str, refazer: bool = False) -> int:
     pdf = fitz.open(stream=sb.storage.from_("pdfs").download(pdf_file), filetype="pdf")
     feitas = 0
     try:
-        for b in blocos:
+        for k, b in enumerate(blocos, 1):
+            avisar(etapa="recortes de figura", feito=k, total=len(blocos))
             n = b["page_number"]
             if not (1 <= n <= pdf.page_count):
                 continue
@@ -371,20 +379,28 @@ def abrir_pacote(dados: bytes, destino: Path) -> Path:
     raise ValueError("não achei index.json no pacote; é a saída do extrator?")
 
 
-def processar(sb, pasta: Path, substituir: bool = False) -> dict:
-    """Confere, grava o que pode, e devolve o relatório do que fez e não fez."""
+def processar(sb, pasta: Path, substituir: bool = False, avisar=_nada) -> dict:
+    """Confere, grava o que pode, e devolve o relatório do que fez e não fez.
+
+    `avisar(**campos)` recebe o andamento (documento atual, etapa, quanto falta),
+    para a tela mostrar o progresso enquanto grava.
+    """
     itens = conferir(sb, pasta)
     gravados, pulados, falhas = [], [], []
+    vao = [it for it in itens if it["situacao"] == "novo"
+           or (it["situacao"] == "ja_extraido" and substituir)]
 
     for it in itens:
         if it["situacao"] == "ja_extraido" and not substituir:
             pulados.append(it); continue
         if it["situacao"] in ("invalido", "desconhecido"):
             falhas.append(it); continue
+        avisar(documento=vao.index(it) + 1, documentos=len(vao),
+               arquivo=it.get("arquivo") or it["slug"], etapa="começando", feito=0, total=0)
         try:
-            r = ingerir_um(sb, pasta, it["slug"], it["pdf_id"])
+            r = ingerir_um(sb, pasta, it["slug"], it["pdf_id"], avisar)
             try:
-                r["figuras"] = gerar_figuras(sb, it["pdf_id"], it["arquivo"])
+                r["figuras"] = gerar_figuras(sb, it["pdf_id"], it["arquivo"], avisar=avisar)
             except Exception as e:
                 r["figuras"] = 0
                 r["aviso_figuras"] = str(e)[:120]

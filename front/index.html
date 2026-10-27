@@ -89,6 +89,15 @@
   .up-st.ja_vetorizado{background:#fff7e8;color:#9a5b00;}
   .up-st.nao{background:var(--cinza-bg);color:var(--cinza);}
   .up-st.legado{background:#eef2ff;color:#3730a3;}
+  .up-prog{margin-top:16px;padding:14px 16px;border:1px solid var(--borda);border-radius:10px;background:var(--cinza-bg);font-size:12.5px;}
+  .up-prog-tit{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#1a1a1a;}
+  .up-prog-tit .spin-sm{border-color:#cfe3d4;border-top-color:var(--verde);}
+  .up-prog-barra{height:8px;background:#e3e3e3;border-radius:5px;overflow:hidden;margin:10px 0 8px;position:relative;}
+  .up-prog-barra span{display:block;height:100%;background:var(--verde);border-radius:5px;transition:width .3s;}
+  .up-prog-barra.indef span{width:35%!important;position:absolute;animation:upIndef 1.3s ease-in-out infinite;}
+  @keyframes upIndef{0%{left:-35%}100%{left:100%}}
+  .up-prog-det{display:flex;justify-content:space-between;gap:12px;color:var(--cinza);flex-wrap:wrap;}
+  .up-zona.ocupada{opacity:.5;pointer-events:none;}
   .up-acoes{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px;font-size:12.5px;}
   .busca-faixa{display:flex;align-items:center;gap:14px;margin:0 0 26px;}
   .busca-wrap{display:flex;align-items:center;gap:10px;border:1.5px solid var(--borda);border-radius:11px;
@@ -1390,7 +1399,48 @@ window.addEventListener("beforeunload", function(e){
    existe e o que está inválido; /upload grava. A conferência vem antes porque
    regravar um documento já extraído apaga páginas e blocos que podem ter sido
    curados à mão — isso tem de ser escolha de alguém, não efeito colateral. */
-var _upArq=null;
+var _upArq=null, _upOcupado=false;
+/* fetch não informa o andamento do envio; o XMLHttpRequest informa. Devolve o
+   que o resto do código precisa da resposta: status, ok e o JSON. */
+function enviarComProgresso(url, fd, aoEnviar){
+  return new Promise(function(ok, falha){
+    var x=new XMLHttpRequest();
+    x.open("POST", url);
+    if(TOKEN) x.setRequestHeader("Authorization","Bearer "+TOKEN);
+    x.upload.onprogress=function(e){ if(e.lengthComputable && aoEnviar) aoEnviar(e.loaded, e.total); };
+    x.upload.onload=function(){ if(aoEnviar) aoEnviar(1, 1, true); };
+    x.onload=function(){
+      if(x.status===401 && TOKEN){ sair(true); }
+      var j={}; try{ j=JSON.parse(x.responseText); }catch(_){ j={detail:"HTTP "+x.status}; }
+      ok({status:x.status, ok:x.status>=200 && x.status<300, json:j});
+    };
+    x.onerror=function(){ falha(new Error("a conexão caiu durante o envio")); };
+    x.send(fd);
+  });
+}
+function _mb(b){ return (b/1048576).toFixed(1)+" MB"; }
+function _dur(ms){ var s=Math.round(ms/1000); return s<60? s+" s" : Math.floor(s/60)+" min "+(s%60)+" s"; }
+/* Quadro de andamento: pct entre 0 e 1, ou null quando não dá para medir (a barra corre sem parar). */
+function _upProgresso(titulo, pct, esq, dir){
+  el("up-resultado").innerHTML='<div class="up-prog"><div class="up-prog-tit"><span class="spin-sm"></span>'+titulo+'</div>'+
+    '<div class="up-prog-barra'+(pct==null?' indef':'')+'"><span style="width:'+(pct==null?0:Math.round(pct*100))+'%"></span></div>'+
+    '<div class="up-prog-det"><span>'+(esq||"")+'</span><span>'+(dir||"")+'</span></div></div>';
+}
+function _upTravar(sim){
+  _upOcupado=sim;
+  var z=el("up-zona"); if(z) z.classList.toggle("ocupada", sim);
+  window.onbeforeunload = sim ? function(){ return "O envio ainda não terminou."; } : null;
+}
+/* Mostra o envio do zip e, quando ele chega, a espera pela resposta do servidor. */
+function _upEnviando(f, depois, t0){
+  return function(feito, total, fim){
+    var gasto=Date.now()-t0;
+    if(fim){ _upProgresso(depois, null, esc(f.name), _dur(gasto)); return; }
+    var pct=total? feito/total : 0, resta=pct>0.02 ? gasto*(1-pct)/pct : null;
+    _upProgresso("Enviando o zip… "+Math.round(pct*100)+"%", pct, _mb(feito)+" de "+_mb(total),
+      resta==null?"":"faltam ~"+_dur(resta));
+  };
+}
 async function baixarLote(){
   var b=el("btn-lote"), q=parseInt(el("lote-qtd").value||"5",10)||5;
   var men=el("lote-menores").checked;
@@ -1433,18 +1483,21 @@ function _upTabela(itens){
 }
 async function upEscolher(f){
   el("up-arquivo").value="";
-  if(!f) return;
+  if(!f || _upOcupado) return;
   if(!/\.zip$/i.test(f.name)){
     _upArq=null;
     _upMsg("<b>"+esc(f.name)+"</b> não é aceito. Só o <b>extracao_….zip</b> que o notebook gera.", true);
     return;
   }
   _upArq=f;
-  _upMsg("Conferindo <b>"+esc(f.name)+"</b> ("+(f.size/1048576).toFixed(1)+" MB)…");
+  var aviso=_upEnviando(f, "Conferindo os documentos no servidor…", Date.now());
+  aviso(0, f.size);
+  _upTravar(true);
   try{
     var fd=new FormData(); fd.append("arquivo", f);
-    var r=await apiFetch(API+"/extracao/conferir",{method:"POST",body:fd});
-    var j=await r.json();
+    var r=await enviarComProgresso(API+"/extracao/conferir", fd, aviso);
+    var j=r.json;
+    _upTravar(false);
     if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
     var it=j.itens||[];
     var nov=it.filter(function(x){return x.situacao==="novo";}).length;
@@ -1461,19 +1514,23 @@ async function upEscolher(f){
         '<button class="up-btn" id="up-gravar" onclick="upGravar()"'+(nov||dup?'':' disabled')+'>Gravar no banco</button>'+
         '<button class="up-btn sec" onclick="upCancelar()">Cancelar</button>'+
       '</div>';
-  }catch(e){ _upArq=null; _upMsg("Pacote recusado: "+esc(e.message), true); }
+  }catch(e){ _upTravar(false); _upArq=null; _upMsg("Pacote recusado: "+esc(e.message), true); }
 }
-function upCancelar(){ _upArq=null; el("up-resultado").innerHTML=""; }
+function upCancelar(){ if(_upOcupado) return; _upArq=null; el("up-resultado").innerHTML=""; }
 async function upGravar(){
   if(!_upArq) return;
   var sub=el("up-subst") && el("up-subst").checked;
   if(sub && !confirm("Substituir os documentos já extraídos? A extração atual deles, e qualquer edição feita à mão, serão apagadas.")) return;
-  var b=el("up-gravar"); b.disabled=true; b.textContent="Gravando…";
+  var f=_upArq, t0=Date.now(), aviso=_upEnviando(f, "Abrindo o zip no servidor…", t0);
+  aviso(0, f.size);
+  _upTravar(true);
   try{
-    var fd=new FormData(); fd.append("arquivo",_upArq); fd.append("substituir", sub?"true":"false");
-    var r=await apiFetch(API+"/extracao/upload",{method:"POST",body:fd});
-    var j=await r.json();
-    if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    var fd=new FormData(); fd.append("arquivo",f); fd.append("substituir", sub?"true":"false");
+    fd.append("acompanhar","true");
+    var r=await enviarComProgresso(API+"/extracao/upload", fd, aviso);
+    if(!r.ok) throw new Error(r.json.detail||("HTTP "+r.status));
+    var j=await _upAcompanhar(r.json.tarefa, f, t0);
+    _upTravar(false);
     var linhas=(j.gravados||[]).map(function(g){ g._gravado=true; return g; })
       .concat(j.pulados||[]).concat(j.falhas||[]);
     el("up-resultado").innerHTML=
@@ -1481,7 +1538,37 @@ async function upGravar(){
       (j.pulados||[]).length+' pulado(s), '+(j.falhas||[]).length+' com problema.</div>'+_upTabela(linhas);
     _upArq=null;
     if((j.gravados||[]).length) carregarDocumentos();
-  }catch(e){ b.disabled=false; b.textContent="Gravar no banco"; _upMsg("Falhou ao gravar: "+esc(e.message), true); }
+  }catch(e){
+    _upTravar(false); _upArq=null;
+    _upMsg("Falhou ao gravar: "+esc(e.message)+"<br>Confira na Home o que chegou a entrar e, se faltar algo, envie o zip de novo.", true);
+  }
+}
+/* O servidor grava em segundo plano; aqui só pergunta como vai, a cada segundo.
+   A barra soma os documentos já prontos com a fração da etapa do atual. */
+async function _upAcompanhar(tid, f, t0){
+  var PESO={"imagens das páginas":[0,.7],"blocos de texto":[.7,.1],"recortes de figura":[.8,.2]};
+  var falhas=0;
+  while(true){
+    await new Promise(function(r){ setTimeout(r, 1000); });
+    var t;
+    try{
+      var r=await apiFetch(API+"/extracao/tarefa/"+tid);
+      t=await r.json();
+      if(!r.ok) throw new Error(t.detail||("HTTP "+r.status));
+      falhas=0;
+    }catch(e){
+      if(++falhas>=10) throw new Error("perdi contato com o servidor ("+e.message+")");
+      continue;
+    }
+    if(t.estado==="concluído") return t.resultado;
+    if(t.estado==="falhou") throw new Error(t.erro||"erro no servidor");
+    if(!t.documentos){ _upProgresso("Conferindo os documentos…", null, esc(f.name), _dur(Date.now()-t0)); continue; }
+    var w=PESO[t.etapa]||[0,0], frac=t.total? t.feito/t.total : 0;
+    var pct=((t.documento-1) + w[0] + w[1]*frac) / t.documentos;
+    _upProgresso("Gravando documento "+t.documento+" de "+t.documentos+"… "+Math.round(pct*100)+"%", pct,
+      esc(t.arquivo)+" · "+esc(t.etapa)+(t.total && t.etapa!=="blocos de texto"?" ("+t.feito+" de "+t.total+")":""),
+      _dur(Date.now()-t0));
+  }
 }
 (function(){
   var z=document.getElementById("up-zona"); if(!z) return;
