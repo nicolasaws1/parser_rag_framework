@@ -872,6 +872,24 @@ def vet_upload(pedido: Request, arquivo: UploadFile = File(...),
     return rel
 
 
+@app.get("/api/vetorizacao/pendentes", tags=["vetorização"])
+def vet_pendentes(colecao: str, pedido: Request):
+    """O que o script da GPU gravou direto no Qdrant e ainda não foi confirmado."""
+    auth.exigir_usuario(pedido, sb)
+    return _qdrant_ou_502(_vet().pendentes, sb, colecao)
+
+
+@app.post("/api/vetorizacao/confirmar", tags=["vetorização"])
+def vet_confirmar(ped: PedidoPacote, pedido: Request):
+    quem = auth.exigir_cargo(pedido, sb, "admin", "curador")
+    rel = _qdrant_ou_502(_vet().confirmar, sb, ped.colecao, ped.ids)
+    for c in rel["confirmados"]:
+        registrar("documento_vetorizado", quem["email"], c["pdf_id"],
+                  {"colecao": rel["colecao"], "pontos": c["pontos"], "origem": "gpu_direto"},
+                  pedido.client.host if pedido.client else None)
+    return rel
+
+
 _CAPACIDADE: dict = {}
 
 

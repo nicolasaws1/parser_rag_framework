@@ -163,13 +163,14 @@ Na primeira execução o Chandra OCR 2 baixa cerca de 10,6 GB de pesos.
 ### Vetorização (GPU)
 
 Pela aba **Vetorização** do site: escolha a coleção, marque os documentos que ainda
-não estão nela, baixe o pacote e o notebook `vetorizador_lote.ipynb`, rode na GPU e
-envie o `vetores_….zip` de volta. A máquina com GPU não recebe chave do banco nem do
-Qdrant. Detalhes em [`vetorizador/README.md`](vetorizador/README.md).
+não estão nela, baixe o pacote e o notebook `vetorizador_lote.ipynb` e rode na GPU.
+O script grava direto no Qdrant (a chave é pedida na hora, nunca fica no pacote nem
+no repositório); depois, na mesma aba, **Confirmar** registra no banco o que entrou.
+Detalhes em [`vetorizador/README.md`](vetorizador/README.md).
 
 ```bash
 pip install -r requirements-vetorizador.txt
-python vetorizador/rodar_vetorizacao.py pacote_….zip
+QDRANT_API_KEY=... python vetorizador/rodar_vetorizacao.py pacote_….zip --enviar
 ```
 
 ## API
@@ -183,7 +184,7 @@ Todas as rotas exigem login, exceto `/api/health` e `/api/health/vivo`. A docume
 | Auditoria | `POST`, `GET /api/log` (o autor vem do token, não do cliente) |
 | Extração | `POST /api/document/{id}/extrair`, `GET /api/fila`, `POST /api/worker/heartbeat`, `GET /api/worker` |
 | Extração por pacote | `GET /api/extracao/lote`, `GET /api/extracao/notebook.ipynb`, `POST /api/extracao/conferir`, `POST /api/extracao/upload` |
-| Vetorização | `GET`, `POST /api/vetorizacao/colecoes`, `GET /api/vetorizacao/documentos`, `POST /api/vetorizacao/pacote`, `GET /api/vetorizacao/notebook.ipynb`, `POST /api/vetorizacao/conferir`, `POST /api/vetorizacao/upload`, `GET /api/vetorizacao/capacidade`, `POST /api/vetorizacao/no-site` |
+| Vetorização | `GET`, `POST /api/vetorizacao/colecoes`, `GET /api/vetorizacao/documentos`, `POST /api/vetorizacao/pacote`, `GET /api/vetorizacao/notebook.ipynb`, `GET /api/vetorizacao/pendentes`, `POST /api/vetorizacao/confirmar`, `POST /api/vetorizacao/conferir`, `POST /api/vetorizacao/upload`, `GET /api/vetorizacao/capacidade`, `POST /api/vetorizacao/no-site` |
 | Curadoria | `GET /api/curadoria/ultima`, `POST /api/curadoria/sincronizar` |
 | Equipe | `POST /api/auth/login`, `GET`, `PATCH /api/auth/eu`, `GET`, `POST /api/equipe`, `PATCH`, `DELETE /api/equipe/{uid}` |
 

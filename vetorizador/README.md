@@ -1,13 +1,20 @@
 # Vetorizar documentos extraídos
 
-A vetorização segue o mesmo desenho da extração: o site entrega um pacote, quem
-tem GPU devolve os vetores, o site grava no Qdrant.
+O site entrega um pacote, a GPU calcula os vetores e grava direto no Qdrant,
+e o site confirma o que foi gravado.
 
 ```
-site (aba Vetorização) --pacote_….zip--> GPU --vetores_….zip--> site --> Qdrant
+site (aba Vetorização) --pacote_….zip--> GPU --vetores--> Qdrant
+                                                            |
+site <-- Confirmar (o site conta os pontos e registra no banco)
 ```
 
-A máquina com GPU não recebe chave nenhuma, nem do Supabase nem do Qdrant.
+A máquina com GPU recebe só a chave do Qdrant, digitada na hora ou guardada nos
+Secrets do Colab como `QDRANT_API_KEY`. Ela nunca vai no pacote, no notebook nem
+no repositório (que é público). A chave do Supabase continua só no site.
+
+Sem acesso ao Qdrant na máquina da GPU, o caminho antigo continua valendo:
+`ENVIAR_DIRETO = False` gera um `vetores_….zip`, e o site grava ao receber.
 
 ## A coleção vem primeiro
 
@@ -28,20 +35,29 @@ fica marcado como teste.
 1. Aba **Vetorização**: escolha a coleção, marque os documentos (o filtro padrão
    já mostra só os que faltam nela) e clique em **Baixar pacote**. Até 100 por pacote.
 2. Baixe o `vetorizador_lote.ipynb` no mesmo lugar e abra no Colab com GPU.
-3. Célula 2: envie o `pacote_….zip`. Rode até a 4, que baixa o `vetores_….zip`.
-4. Volte à aba e arraste o `vetores_….zip`. O site mostra, documento por
-   documento, o que é novo e o que já está na coleção, e só grava quando você confirma.
-   Para regravar quem já está lá, marque a opção: os pontos antigos dele (inclusive
-   os dos scripts antigos) são apagados antes.
+3. Célula 2: envie o `pacote_….zip`. Célula 3: a chave do Qdrant e, se quiser,
+   outra coleção em `COLECAO` (vazio usa a escolhida no site). Célula 4: calcula
+   e grava.
+4. Volte à aba, clique em **Atualizar** no quadro "Gravados pela GPU, aguardando
+   confirmação" e em **Confirmar vetorização**. O site conta os pontos de cada
+   documento no Qdrant, recusa os incompletos (envio interrompido) e registra os
+   outros no banco.
+
+Documento que já tem pontos na coleção, gravados por aqui ou pelos scripts
+antigos, é pulado antes de calcular. Para regravar, marque `SUBSTITUIR`: os
+pontos antigos dele saem antes de os novos entrarem.
 
 Sem notebook, num servidor com GPU:
 
 ```bash
 pip install -r requirements-vetorizador.txt
-python vetorizador/rodar_vetorizacao.py pacote_….zip --lote 64
+export QDRANT_API_KEY=...        # não grave em arquivo do repositório
+python vetorizador/rodar_vetorizacao.py pacote_….zip --enviar --lote 64
+python vetorizador/rodar_vetorizacao.py pacote_….zip --enviar --colecao sb100_clone
 ```
 
-Se a sessão cair, rode de novo com o mesmo pacote: o documento que já terminou é pulado.
+Se a sessão cair, rode de novo com o mesmo pacote: o documento já calculado não
+é recalculado, e o já gravado não é gravado de novo.
 
 ## O que vai em cada trecho
 

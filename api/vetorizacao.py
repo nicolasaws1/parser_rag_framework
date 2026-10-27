@@ -135,6 +135,11 @@ _CACHE: dict[str, tuple[float, dict]] = {}
 # antigos. Apagar precisa do valor exato (o filtro do Qdrant não normaliza), e
 # os scripts de antes gravaram ora "X.pdf", ora "X.md".
 _ARQUIVOS: dict[str, dict[str, set[str]]] = {}
+# coleção -> pdf_id -> resumo dos pontos que têm pdf_id (gravados pelo site ou
+# direto pelo script da GPU): quantos, maior índice, fatiamento, modelos, quando
+_NOVOS: dict[str, dict[str, dict]] = {}
+_CAMPOS_NOVOS = ["pdf_id", "file", "chunk_index", "config_chunk", "config_overlap",
+                 "modelo_denso", "modelo_esparso", "origem_texto", "ingestao"]
 
 
 def _chave_arquivo(nome: str) -> str:
@@ -159,9 +164,10 @@ def pontos_por_documento(sb, colecao: str, usar_cache: bool = True) -> dict[str,
 
     contagem: dict[str, int] = {}
     arquivos: dict[str, set[str]] = {}
+    novos: dict[str, dict] = {}
     oferta = None
     while True:
-        corpo = {"limit": 1000, "with_payload": ["pdf_id", "file"], "with_vector": False}
+        corpo = {"limit": 1000, "with_payload": _CAMPOS_NOVOS, "with_vector": False}
         if oferta is not None:
             corpo["offset"] = oferta
         r = _req("POST", f"/collections/{colecao}/points/scroll", json=corpo, timeout=120)["result"]
@@ -172,12 +178,32 @@ def pontos_por_documento(sb, colecao: str, usar_cache: bool = True) -> dict[str,
                 contagem[pid] = contagem.get(pid, 0) + 1
                 if not pl.get("pdf_id") and pl.get("file"):
                     arquivos.setdefault(pid, set()).add(pl["file"])
+                elif pl.get("pdf_id"):
+                    nv = novos.setdefault(pid, {"pontos": 0, "max_indice": -1, "ingestao": ""})
+                    nv["pontos"] += 1
+                    nv["max_indice"] = max(nv["max_indice"], int(pl.get("chunk_index") or 0))
+                    nv["ingestao"] = max(nv["ingestao"], pl.get("ingestao") or "")
+                    for k in ("config_chunk", "config_overlap", "modelo_denso",
+                              "modelo_esparso", "origem_texto"):
+                        nv.setdefault(k, pl.get(k))
         oferta = r.get("next_page_offset")
         if oferta is None:
             break
     _CACHE[colecao] = (agora, contagem)
     _ARQUIVOS[colecao] = arquivos
+    _NOVOS[colecao] = novos
     return contagem
+
+
+def _falta_confirmar(registro: dict | None, novo: dict | None) -> bool:
+    """Pontos novos que o registro do banco ainda não conhece: gravados direto
+    pelo script da GPU, ou regravados depois do último registro."""
+    if not novo:
+        return False
+    if not registro or not registro.get("ok"):
+        return True
+    return (registro.get("pontos") != novo["pontos"]
+            or (registro.get("finished_at") or "")[:19] < novo["ingestao"][:19])
 
 
 def config_da_colecao(colecao: str) -> dict | None:
@@ -192,6 +218,7 @@ def config_da_colecao(colecao: str) -> dict | None:
 def status_documentos(sb, colecao: str) -> list[dict]:
     """Documentos extraídos e a situação de cada um NESTA coleção."""
     pontos = pontos_por_documento(sb, colecao)
+    novos = _NOVOS.get(colecao, {})
     pdfs = (sb.table("pdfs").select("id,pdf_file,total_pages,extracted,document_url")
             .eq("extracted", True).execute().data)
     ids = [p["id"] for p in pdfs]
@@ -210,6 +237,8 @@ def status_documentos(sb, colecao: str) -> list[dict]:
     for p in pdfs:
         n = pontos.get(p["id"], 0)
         r = reg.get(p["id"])
+        if _falta_confirmar(r, novos.get(p["id"])):
+            r = None
         fora.append({
             "pdf_id": p["id"], "arquivo": p["pdf_file"], "paginas": p["total_pages"],
             "titulo": (metas.get(p["id"]) or {}).get("title"),
@@ -218,7 +247,8 @@ def status_documentos(sb, colecao: str) -> list[dict]:
             "quando": (r or {}).get("finished_at"),
             "como": ({"chunk": r.get("chunk_size"), "overlap": r.get("chunk_overlap"),
                       "denso": r.get("dense_model"), "origem": r.get("origem_texto")}
-                     if r else ({"legado": True} if n else None)),
+                     if r else ({"pendente": True} if p["id"] in novos
+                                else {"legado": True} if n else None)),
             "editado": p["id"] in editados,
         })
     fora.sort(key=lambda d: (d["vetorizado"], (d["titulo"] or d["arquivo"]).lower()))
@@ -290,7 +320,9 @@ def montar_pacote(sb, colecao: str, ids: list[str], quem: str) -> tuple[bytes, d
            "criado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
            "chunk": {"tamanho": chunker.TAMANHO, "sobreposicao": chunker.SOBREPOSICAO,
                      "versao": chunker.VERSAO},
-           "modelos": MODELOS, "documentos": []}
+           "modelos": MODELOS, "documentos": [],
+           # só a URL: a chave quem tem é quem roda, e ela não viaja no pacote
+           "qdrant_url": _qd()[0]}
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for p in pdfs:
@@ -448,6 +480,68 @@ def importar_vetores(sb, pasta: Path, substituir: bool = False,
     _CACHE.pop(col, None)
     return {"colecao": col, "gravados": gravados, "pulados": pulados, "falhas": falhas,
             "avisos": rel["avisos"]}
+
+
+# ─────────────── gravados direto pela GPU: confirmar no site ─────────────────
+
+def pendentes(sb, colecao: str) -> list[dict]:
+    """Documentos que o script da GPU gravou direto no Qdrant e o banco ainda
+    não registrou. `completo` diz se os índices dos trechos não têm buraco
+    (um envio interrompido no meio deixaria)."""
+    pontos_por_documento(sb, colecao, usar_cache=False)
+    novos = _NOVOS.get(colecao, {})
+    if not novos:
+        return []
+    reg = {v["pdf_id"]: v for v in sb.table("vectorizations").select("*")
+           .eq("collection", colecao).in_("pdf_id", list(novos)).execute().data}
+    faltam = {pid: nv for pid, nv in novos.items() if _falta_confirmar(reg.get(pid), nv)}
+    if not faltam:
+        return []
+    pdfs = {p["id"]: p for p in sb.table("pdfs").select("id,pdf_file")
+            .in_("id", list(faltam)).execute().data}
+    metas = {m["pdf_id"]: m for m in sb.table("article_metadata").select("pdf_id,title")
+             .in_("pdf_id", list(faltam)).execute().data}
+    fora = []
+    for pid, nv in faltam.items():
+        fora.append({"pdf_id": pid, "arquivo": (pdfs.get(pid) or {}).get("pdf_file"),
+                     "titulo": (metas.get(pid) or {}).get("title"),
+                     "no_acervo": pid in pdfs, "pontos": nv["pontos"],
+                     "completo": nv["pontos"] == nv["max_indice"] + 1,
+                     "ingestao": nv["ingestao"], "chunk": nv.get("config_chunk"),
+                     "overlap": nv.get("config_overlap"), "ja_registrado": pid in reg})
+    fora.sort(key=lambda d: d["ingestao"], reverse=True)
+    return fora
+
+
+def confirmar(sb, colecao: str, ids: list[str]) -> dict:
+    """Registra no banco o que o Qdrant mostra. Não confia no navegador: conta
+    os pontos de novo e recusa documento incompleto ou fora do acervo."""
+    lista = {d["pdf_id"]: d for d in pendentes(sb, colecao)}
+    novos = _NOVOS.get(colecao, {})
+    confirmados, recusados = [], []
+    for pid in ids:
+        d = lista.get(pid)
+        if not d:
+            recusados.append({"pdf_id": pid, "motivo": "nada pendente para ele nesta coleção"})
+            continue
+        if not d["no_acervo"]:
+            recusados.append({**d, "motivo": "o documento saiu do acervo"}); continue
+        if not d["completo"]:
+            recusados.append({**d, "motivo": "faltam trechos: o envio parou no meio? rode de novo "
+                                             "com o mesmo pacote"}); continue
+        nv = novos[pid]
+        sb.table("vectorizations").upsert({
+            "pdf_id": pid, "collection": colecao,
+            "dense_model": nv.get("modelo_denso"), "dense_dim": DIM,
+            "sparse_model": nv.get("modelo_esparso"),
+            "chunk_size": nv.get("config_chunk"), "chunk_overlap": nv.get("config_overlap"),
+            "chunks": nv["pontos"], "pontos": nv["pontos"], "origem_texto": nv.get("origem_texto"),
+            "started_at": nv["ingestao"], "finished_at": nv["ingestao"], "ok": True, "erro": None,
+        }, on_conflict="pdf_id,collection").execute()
+        sb.table("pdfs").update({"vectorized": True, "vectorized_at": nv["ingestao"][:19]})             .eq("id", pid).execute()
+        confirmados.append(d)
+    _CACHE.pop(colecao, None)
+    return {"colecao": colecao, "confirmados": confirmados, "recusados": recusados}
 
 
 # ──────────────────────── vetorizar no próprio site ──────────────────────────

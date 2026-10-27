@@ -694,15 +694,26 @@
               <div id="vet-pacote-info" style="font-size:11.5px;color:var(--cinza);margin-top:6px"></div></div>
             <div class="up-passo"><b>2. BAIXE O NOTEBOOK</b>Abra no Colab com GPU, ou no Jupyter do servidor.
               <button class="up-btn sec" onclick="vetBaixarNotebook()" style="margin-top:8px">vetorizador_lote.ipynb</button></div>
-            <div class="up-passo"><b>3. RODE</b>A célula 2 pede o <code>pacote_….zip</code>; a 4 baixa o
-              <code>vetores_….zip</code>. Sem notebook: <code>python vetorizador/rodar_vetorizacao.py pacote_….zip</code></div>
-            <div class="up-passo"><b>4. ENVIE OS VETORES</b>Arraste o <code>vetores_….zip</code> abaixo. A coleção
-              é a que estava escolhida quando o pacote foi baixado.</div>
+            <div class="up-passo"><b>3. RODE</b>A célula 2 pede o <code>pacote_….zip</code>, a 3 pede a chave do
+              Qdrant (não fica salva em lugar nenhum) e a 4 calcula e grava direto na coleção.</div>
+            <div class="up-passo"><b>4. CONFIRME AQUI</b>Clique em <b style="display:inline;color:inherit">Atualizar</b> abaixo: o site
+              confere os pontos no Qdrant e registra quem foi vetorizado.</div>
           </div>
-          <input type="file" id="vet-arquivo" accept=".zip,application/zip" style="display:none" onchange="vetEscolher(this.files[0])">
-          <div class="up-zona" id="vet-zona" onclick="el('vet-arquivo').click()">
-            <b>Clique ou arraste o vetores_….zip aqui</b><br>Só a saída do vetorizador é aceita.
+          <div style="border:1px solid var(--borda);border-radius:10px;padding:12px 14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+              <b style="font-size:13px">Gravados pela GPU, aguardando confirmação</b>
+              <button class="up-btn sec" onclick="vetCarregarPendentes()">Atualizar</button>
+            </div>
+            <div id="vet-pendentes" style="font-size:12.5px;color:var(--cinza);margin-top:6px">—</div>
           </div>
+          <details style="margin-top:12px;font-size:12.5px">
+            <summary style="cursor:pointer;color:var(--cinza)">Sem acesso ao Qdrant na máquina da GPU? Envie o <code>vetores_….zip</code></summary>
+            <div style="margin-top:8px;color:var(--cinza)">Rode o notebook com <code>ENVIAR_DIRETO = False</code>; ele gera o zip e o site grava.</div>
+            <input type="file" id="vet-arquivo" accept=".zip,application/zip" style="display:none" onchange="vetEscolher(this.files[0])">
+            <div class="up-zona" id="vet-zona" onclick="el('vet-arquivo').click()" style="margin-top:8px">
+              <b>Clique ou arraste o vetores_….zip aqui</b><br>Só a saída do vetorizador é aceita.
+            </div>
+          </details>
         </div>
         <div class="vet-metodo">
           <h4>B. Aqui mesmo, no servidor do site</h4>
@@ -1540,11 +1551,15 @@ async function vetCarregarDocs(){
   el("vet-col-info").textContent=c?(c.teste?"coleção de teste":""):"";
   if(!VET_COL){ el("vet-docs").innerHTML='<div class="md-vazio">Nenhuma coleção compatível.</div>'; return; }
   el("vet-docs").innerHTML='<div class="md-vazio">Conferindo o que já está em '+esc(VET_COL)+'…</div>';
+  // a resposta de uma coleção trocada no meio do caminho chega depois e não
+  // pode sobrescrever a da coleção escolhida agora
+  var col=VET_COL;
   try{
-    var r=await apiFetch(API+"/vetorizacao/documentos?colecao="+encodeURIComponent(VET_COL));
+    var r=await apiFetch(API+"/vetorizacao/documentos?colecao="+encodeURIComponent(col));
     var j=await r.json(); if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    if(col!==VET_COL) return;
     VET_DOCS=j;
-  }catch(e){ el("vet-docs").innerHTML='<div class="md-vazio">'+esc(e.message)+'</div>'; return; }
+  }catch(e){ if(col===VET_COL) el("vet-docs").innerHTML='<div class="md-vazio">'+esc(e.message)+'</div>'; return; }
   if(VET_PRE){
     var ids=new Set(VET_PRE); VET_PRE=null;
     VET_DOCS.forEach(function(d){ if(ids.has(d.pdf_id)&&!d.vetorizado) VET_SEL.add(d.pdf_id); });
@@ -1556,6 +1571,7 @@ async function vetCarregarDocs(){
   el("uso-txt").textContent=feitos+" de "+VET_DOCS.length+" extraídos nela";
   el("uso-barra").style.width=(VET_DOCS.length?Math.round(100*feitos/VET_DOCS.length):0)+"%";
   vetFiltro(VET_FILTRO);
+  if(CARGO!=="leitor") vetCarregarPendentes();
 }
 function vetFiltro(f){
   VET_FILTRO=f;
@@ -1565,6 +1581,7 @@ function vetFiltro(f){
 function _vetComo(d){
   if(!d.vetorizado) return '<span class="up-st nao">não vetorizado</span>';
   var c=d.como||{};
+  if(c.pendente) return '<span class="up-st ja_vetorizado">'+d.pontos+' pontos</span> <span style="color:#9a5b00">aguardando confirmação</span>';
   if(c.legado) return '<span class="up-st legado">scripts antigos</span> <span style="color:var(--cinza)">'+d.pontos+' pontos</span>';
   return '<span class="up-st ja_vetorizado">'+d.pontos+' pontos</span> <span style="color:var(--cinza)">'+
     (c.chunk?c.chunk+'/'+c.overlap:'')+(d.quando?' · '+_quando(d.quando):'')+(c.origem==="edicao"?' · texto editado':'')+'</span>';
@@ -1693,6 +1710,38 @@ function _vetResumo(j){
   el("vet-resultado").innerHTML='<div style="margin-top:16px;font-size:13px">Coleção <b>'+esc(j.colecao)+'</b>: <b>'+
     (j.gravados||[]).length+' gravado(s)</b>, '+(j.pulados||[]).length+' pulado(s), '+(j.falhas||[]).length+' com problema.</div>'+_vetTabela(linhas);
   if((j.gravados||[]).length){ VET_SEL.clear(); vetCarregarColecoes(j.colecao); carregarDocumentos(); }
+}
+async function vetCarregarPendentes(){
+  var box=el("vet-pendentes"), col=VET_COL; if(!col) return;
+  box.textContent="Conferindo "+col+" no Qdrant…";
+  try{
+    var r=await apiFetch(API+"/vetorizacao/pendentes?colecao="+encodeURIComponent(col));
+    var j=await r.json(); if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    if(col!==VET_COL) return;
+    if(!j.length){ box.textContent="Nada pendente em "+col+"."; return; }
+    box.innerHTML='<table class="up-tab"><thead><tr><th style="width:28px"></th><th>Documento</th><th>Pontos</th><th>Gravado em</th><th>Situação</th></tr></thead><tbody>'+
+      j.map(function(d){
+        var ok=d.completo&&d.no_acervo;
+        return '<tr><td><input type="checkbox" class="vet-pend" value="'+esc(d.pdf_id)+'"'+(ok?' checked':' disabled')+'></td>'+
+          '<td>'+esc((d.titulo||d.arquivo||d.pdf_id).slice(0,100))+'</td><td>'+d.pontos+'</td><td>'+_quando(d.ingestao)+'</td>'+
+          '<td>'+(!d.no_acervo?'<span class="up-st invalido">fora do acervo</span>':!d.completo?'<span class="up-st invalido">incompleto</span> rode de novo':
+            '<span class="up-st novo">'+(d.ja_registrado?'regravado':'novo')+'</span>')+'</td></tr>';
+      }).join("")+'</tbody></table>'+
+      '<div class="up-acoes"><button class="up-btn" id="vet-btn-confirmar" onclick="vetConfirmar()">Confirmar vetorização</button></div>';
+  }catch(e){ if(col===VET_COL) box.textContent="Não deu para conferir: "+e.message; }
+}
+async function vetConfirmar(){
+  var ids=[].map.call(document.querySelectorAll(".vet-pend:checked"), function(c){ return c.value; });
+  if(!ids.length) return;
+  var b=el("vet-btn-confirmar"); b.disabled=true; b.textContent="Confirmando…";
+  try{
+    var r=await apiFetch(API+"/vetorizacao/confirmar",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({colecao:VET_COL,ids:ids})});
+    var j=await r.json(); if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    _vetMsg('<b>'+j.confirmados.length+' confirmado(s)</b> em '+esc(j.colecao)+
+      (j.recusados.length?', '+j.recusados.length+' recusado(s): '+j.recusados.map(function(x){ return esc((x.titulo||x.arquivo||x.pdf_id)+": "+x.motivo); }).join("; "):''));
+    VET_SEL.clear(); vetCarregarColecoes(j.colecao); carregarDocumentos();
+  }catch(e){ b.disabled=false; b.textContent="Confirmar vetorização"; _vetMsg("Falhou ao confirmar: "+esc(e.message), true); }
 }
 var _VET_CAP=null;
 async function vetCapacidade(){
