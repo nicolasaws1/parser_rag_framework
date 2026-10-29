@@ -434,7 +434,7 @@ def salvar_edicao(pdf_id: str, edicao: Edicao, pedido: Request):
     try:
         sb.table("document_edits").upsert(linha, on_conflict="pdf_id").execute()
     except Exception as e:
-        raise HTTPException(503, f"tabela document_edits indisponível — aplique "
+        raise HTTPException(503, f"tabela document_edits indisponível; aplique "
                                  f"supabase/002_edicoes.sql. Detalhe: {e}")
     registrar("documento_editado", autor, pdf_id,
               {"paginas": [p.get("n") for p in (edicao.layout or [])],
@@ -546,7 +546,7 @@ def historico(pedido: Request, limite: int = 200, evento: str | None = None,
             q = q.eq("alvo", alvo)
         return q.execute().data
     except Exception as e:
-        raise HTTPException(503, f"tabela audit_log indisponível — aplique "
+        raise HTTPException(503, f"tabela audit_log indisponível; aplique "
                                  f"supabase/004_auditoria.sql. Detalhe: {e}")
 
 
@@ -574,7 +574,7 @@ def pedir_extracao(pdf_id: str, pedido_ext: PedidoExtracao, pedido: Request):
         sb.table("pdfs").update({"extraction_requested_at": agora,
                                  "extraction_requested_by": quem["email"]})             .eq("id", pdf_id).execute()
     except Exception as e:
-        raise HTTPException(503, f"colunas da fila ausentes — aplique "
+        raise HTTPException(503, f"colunas da fila ausentes; aplique "
                                  f"supabase/005_fila_extracao.sql. Detalhe: {e}")
     registrar("extracao_solicitada", quem["email"], pdf_id,
               {"arquivo": linha[0]["pdf_file"]},
@@ -593,7 +593,7 @@ def fila_extracao(pedido: Request):
                 .eq("extracted", False).not_.is_("extraction_requested_at", "null")
                 .order("extraction_requested_at").execute().data)
     except Exception as e:
-        raise HTTPException(503, f"colunas da fila ausentes — aplique "
+        raise HTTPException(503, f"colunas da fila ausentes; aplique "
                                  f"supabase/005_fila_extracao.sql. Detalhe: {e}")
 
 

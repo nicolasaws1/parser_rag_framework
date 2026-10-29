@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vetorização Cientométrica — Squad 2</title>
+<title>Vetorização Cientométrica · Squad 2</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -444,18 +444,18 @@
     <div class="sb-item" id="nav-equipe" onclick="irEquipe()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Equipe</span></div>
   </nav>
   <div class="sb-plan">
-    <small>Coleção <b style="color:var(--verde)" id="uso-col">—</b></small>
+    <small>Coleção <b style="color:var(--verde)" id="uso-col">-</b></small>
     <div class="barra"><span id="uso-barra"></span></div>
     <small id="uso-txt">escolha na aba Vetorização</small>
   </div>
   <div class="sb-user" id="sb-user" onclick="alternarMenuConta(event)" title="Sua conta">
     <div class="av">--</div>
-    <div style="flex:1;min-width:0"><span id="sb-nome">—</span><br><small id="sb-sub">—</small></div>
+    <div style="flex:1;min-width:0"><span id="sb-nome">-</span><br><small id="sb-sub">-</small></div>
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
          stroke-linecap="round" stroke-linejoin="round" style="opacity:.5;flex-shrink:0"><polyline points="6 9 12 15 18 9"/></svg>
   </div>
   <div id="menu-conta" class="menu-conta" style="display:none">
-    <div class="menu-cab"><b id="mc-nome">—</b><small id="mc-email">—</small></div>
+    <div class="menu-cab"><b id="mc-nome">-</b><small id="mc-email">-</small></div>
     <div class="menu-item" onclick="abrirMinhaConta()">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       Minha conta</div>
@@ -486,10 +486,10 @@
              stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="opacity:.75">
           <polyline points="6 9 12 15 18 9"/></svg>
       </div>
-      <p id="hero-desc">Artigos aprovados pelo curador na Squad 1, recebidos pela API. Só os metadados chegam aqui
-         — o parser (DocLayout-YOLO + Chandra OCR) é quem descobre páginas, tabelas, figuras e fórmulas.</p>
+      <p id="hero-desc">Artigos aprovados pelo curador na Squad 1, recebidos pela API. Só os metadados chegam aqui;
+         o parser (DocLayout-YOLO + Chandra OCR) é quem descobre páginas, tabelas, figuras e fórmulas.</p>
       <div class="home-badges" id="hero-badges">
-        <div class="home-badge"><div class="n" id="badge-curad">—</div><div class="l">Aprovados na curadoria</div></div>
+        <div class="home-badge"><div class="n" id="badge-curad">-</div><div class="l">Aprovados na curadoria</div></div>
         <div class="home-badge"><div class="n" id="badge-total">0</div><div class="l" id="badge-total-l">Baixados aqui</div></div>
         <div class="home-badge"><div class="n" id="badge-ext">0</div><div class="l">Extraídos (parser)</div></div>
       </div>
@@ -566,7 +566,7 @@
     <div class="lista" id="lista"></div>
     <div id="paginacao" class="paginacao"></div>
     <footer class="rodape">
-      <div class="rodape-marca"><b>SB100</b> — Squad 2</div>
+      <div class="rodape-marca"><b>SB100</b> · Squad 2</div>
       <div>Vetorização e extração</div>
     </footer>
   </div>
@@ -577,8 +577,8 @@
   <div class="home" id="view-equipe" style="display:none">
     <div class="home-hero">
       <h2>Equipe</h2>
-      <p>Quem tem acesso a esta plataforma. O cadastro e' interno: nao existe auto-registro
-         na tela de login — so' quem ja' tem conta cadastra outra pessoa.</p>
+      <p>Quem tem acesso a esta plataforma. O cadastro é interno: não existe auto-registro
+         na tela de login, só quem já tem conta cadastra outra pessoa.</p>
       <div class="home-badges">
         <div class="home-badge"><div class="n" id="eq-total">0</div><div class="l">Integrantes</div></div>
         <div class="home-badge"><div class="n" id="eq-admins">0</div><div class="l">Administradores</div></div>
@@ -594,13 +594,13 @@
           <input id="eq-nome" class="eq-inp" placeholder="Nome da pessoa"></div>
         <div><label class="eq-lbl">E-mail</label>
           <input id="eq-email" type="email" class="eq-inp" placeholder="pessoa@exemplo.com"></div>
-        <div><label class="eq-lbl">Senha provisoria (min. 8)</label>
+        <div><label class="eq-lbl">Senha provisória (mín. 8)</label>
           <input id="eq-senha" type="text" class="eq-inp" placeholder="a pessoa troca depois"></div>
         <div><label class="eq-lbl">Cargo</label>
           <select id="eq-cargo" class="eq-inp">
-            <option value="curador">Curador — le e edita documentos</option>
-            <option value="admin">Admin — tudo, inclusive cadastrar</option>
-            <option value="leitor">Leitor — so consulta</option>
+            <option value="curador">Curador: lê e edita documentos</option>
+            <option value="admin">Admin: tudo, inclusive cadastrar</option>
+            <option value="leitor">Leitor: só consulta</option>
           </select></div>
       </div>
       <div id="eq-erro" style="min-height:18px;font-size:12.5px;color:var(--vermelho);margin-top:8px"></div>
@@ -622,10 +622,10 @@
       <p class="hero-oculta">A extração roda onde há GPU: no Colab, ou num servidor com placa. Este site não extrai:
          você escolhe os PDFs, leva o lote para a GPU e envia o resultado de volta.</p>
       <div class="home-badges hero-oculta">
-        <div class="home-badge"><div class="n" id="gpu-b-pend">—</div><div class="l">PDFs a extrair</div></div>
-        <div class="home-badge"><div class="n" id="gpu-b-pags">—</div><div class="l" id="gpu-b-pags-l">Páginas a extrair</div></div>
-        <div class="home-badge"><div class="n" id="gpu-b-sol">—</div><div class="l">Solicitados na Home</div></div>
-        <div class="home-badge"><div class="n" id="gpu-b-ult">—</div><div class="l" id="gpu-b-ult-l">Última extração gravada</div></div>
+        <div class="home-badge"><div class="n" id="gpu-b-pend">-</div><div class="l">PDFs a extrair</div></div>
+        <div class="home-badge"><div class="n" id="gpu-b-pags">-</div><div class="l" id="gpu-b-pags-l">Páginas a extrair</div></div>
+        <div class="home-badge"><div class="n" id="gpu-b-sol">-</div><div class="l">Solicitados na Home</div></div>
+        <div class="home-badge"><div class="n" id="gpu-b-ult">-</div><div class="l" id="gpu-b-ult-l">Última extração gravada</div></div>
       </div>
       <div id="gpu-resumo" class="hero-resumo"></div>
     </div>
@@ -692,9 +692,9 @@
          vetores no Qdrant. Cada coleção é um índice à parte: um documento pode estar numa e faltar em outra,
          então tudo aqui é sempre em relação à coleção escolhida.</p>
       <div class="home-badges hero-oculta">
-        <div class="home-badge"><div class="n" id="vet-badge-feitos">—</div><div class="l">PDFs vetorizados nela</div></div>
-        <div class="home-badge"><div class="n" id="vet-badge-pontos">—</div><div class="l">Pontos na coleção</div></div>
-        <div class="home-badge"><div class="n" id="vet-badge-cpu">—</div><div class="l">Este servidor</div></div>
+        <div class="home-badge"><div class="n" id="vet-badge-feitos">-</div><div class="l">PDFs vetorizados nela</div></div>
+        <div class="home-badge"><div class="n" id="vet-badge-pontos">-</div><div class="l">Pontos na coleção</div></div>
+        <div class="home-badge"><div class="n" id="vet-badge-cpu">-</div><div class="l">Este servidor</div></div>
       </div>
       <div id="vet-resumo" class="hero-resumo"></div>
     </div>
@@ -753,7 +753,7 @@
               <b style="font-size:13px">Gravados pela GPU, aguardando confirmação</b>
               <button class="up-btn sec" onclick="vetCarregarPendentes()">Atualizar</button>
             </div>
-            <div id="vet-pendentes" style="font-size:12.5px;color:var(--cinza);margin-top:6px">—</div>
+            <div id="vet-pendentes" style="font-size:12.5px;color:var(--cinza);margin-top:6px">-</div>
           </div>
           <details style="margin-top:12px;font-size:12.5px">
             <summary style="cursor:pointer;color:var(--cinza)">Sem acesso ao Qdrant na máquina da GPU? Envie o <code>vetores_….zip</code></summary>
@@ -784,7 +784,7 @@
       <span class="ex-rota" id="ex-rota"></span>
       <span class="ex-zoom"><button onclick="zoomPdf(-15)" title="Menos zoom">−</button><span id="zoom-lbl">100%</span><button onclick="zoomPdf(15)" title="Mais zoom">+</button><button onclick="zoomReset()" title="Resetar zoom">⟲</button></span>
       <span class="sp"></span>
-      <span style="color:var(--cinza)">Passe o mouse no texto ou no PDF — os dois se destacam</span>
+      <span style="color:var(--cinza)">Passe o mouse no texto ou no PDF: os dois se destacam</span>
       <span id="edicao-estado" style="display:none;align-items:center;gap:5px;font-size:12px;font-weight:600;margin-left:10px"></span>
       <button id="btn-descartar" onclick="descartarEdicao()" title="Volta ao texto que a extração produziu"
               style="display:none;margin-left:8px;padding:4px 10px;border:1px solid var(--borda);border-radius:7px;background:#fff;font-size:12px;cursor:pointer">Descartar edição</button>
@@ -810,7 +810,7 @@
         <div class="res-body" id="res-legivel"></div>
         <div class="res-body" id="res-md" style="display:none"></div>
         <div class="res-body" id="res-meta" style="display:none"></div>
-        <div class="res-body" id="res-code" style="display:none"><div class="code-topo">Pipeline de extração usado (híbrido Squad 2):</div><pre class="code-block"># Extrator híbrido SB100 — Squad 2
+        <div class="res-body" id="res-code" style="display:none"><div class="code-topo">Pipeline de extração usado (híbrido Squad 2):</div><pre class="code-block"># Extrator híbrido SB100 · Squad 2
 # YOLO roteia · Chandra OCR 2 na tabela · Docling no texto · PyMuPDF de rede de segurança
 
 for pagina in documento:
@@ -863,11 +863,14 @@ function _utc(iso){ return !iso ? null : (/(Z|[+-]\d\d:?\d\d)$/i.test(iso) ? iso
 /* mesma regra de api/curadoria.py: sem status (anterior à curadoria) vale; com
    status, só "Aprovado..." segue para extração e vetorização */
 function foraDoFluxo(st){ st=String(st||"").trim().toLowerCase(); return !!st && st.indexOf("aprovad")!==0; }
+/* campo de metadado com valor de verdade ("-" e "N/A" da curadoria não contam) */
+function _vale(v){ v=String(v==null?"":v).trim(); return !!v && v!=="-" && v.toUpperCase()!=="N/A"; }
+function _autoresCurto(m, n){ return _vale(m.autores) ? m.autores.split(",").slice(0,n).join(",")+" et al." : ""; }
 function _meta(m){
   m = m || {};
-  return { titulo:m.title||"(sem título)", autores:m.authors||"—", ano:m.year||"—",
-           periodico:m.journal||"—", volume:"—", doi:m.doi||"—",
-           categoria:m.category||"—", tipo:m.document_type||"Artigo científico",
+  return { titulo:m.title||"(sem título)", autores:m.authors||"-", ano:m.year||"-",
+           periodico:m.journal||"-", doi:m.doi||"-",
+           categoria:m.category||"-", tipo:m.document_type||"Artigo científico",
            palavras_chave:m.keywords||"" };
 }
 function _counts(bs){
@@ -1013,7 +1016,7 @@ function renderHome(){
   // documento que a curadoria deixou de aprovar fica no banco, marcado, mas
   // não conta como baixado: senão dava "230 de 227"
   var noBanco=IDX.filter(function(d){ return !d.fora; }).length, nFora=IDX.length-noBanco;
-  el("badge-curad").textContent = TOTAL_CURADORIA || "—";
+  el("badge-curad").textContent = TOTAL_CURADORIA || "-";
   el("badge-total").textContent = TOTAL_CURADORIA ? (noBanco+" de "+TOTAL_CURADORIA) : String(noBanco);
   el("badge-total-l").textContent = "Baixados aqui"+(nFora ? " (+"+nFora+" rejeitado"+(nFora>1?"s":"")+" na curadoria)" : "");
   el("badge-ext").textContent   = extraidos.size+" de "+noBanco;
@@ -1038,9 +1041,9 @@ function renderHome(){
           <input type="checkbox" class="card-g-chk" ${sel?"checked":""} onchange="toggleSel(${i},this)"></div>
         <div class="card-g-body">
           <div class="linha-tit">${m.titulo}</div>
-          <div class="card-g-meta">${(m.autores||"").split(",")[0]} et al. · ${m.ano} · ${m.periodico} · <b>${d.n_paginas}</b> páginas</div>
+          <div class="card-g-meta">${[_autoresCurto(m,1), m.ano, m.periodico].filter(_vale).concat(["<b>"+d.n_paginas+"</b> páginas"]).join(" · ")}</div>
           <div class="card-g-chips">
-            <span class="mini-chip cat">${m.categoria}</span>
+            ${_vale(m.categoria)?`<span class="mini-chip cat">${m.categoria}</span>`:""}
             ${ext?'<span class="mini-chip ok">extraído</span>':(d.na_fila?'<span class="mini-chip fila">na fila</span>':'')}${vet?'<span class="mini-chip vet">vetorizado</span>':''}${d.fora?'<span class="mini-chip rej" title="Status na curadoria: '+esc(d.curadoria)+'. Não vai para extração nem vetorização.">'+esc(d.curadoria.toLowerCase())+' na curadoria</span>':''}
           </div>
           <button class="btn-abrir" onclick="abrirDoc(${i})" title="Abrir">Abrir
@@ -1055,8 +1058,10 @@ function renderHome(){
         </div>
         <div class="linha-info">
           <div class="linha-tit">${m.titulo}</div>
-          <div class="linha-meta">${(m.autores||"").split(",").slice(0,2).join(",")} et al. · ${m.ano} · ${m.periodico}
-            &nbsp;·&nbsp; DOI: <code>${m.doi}</code> &nbsp;·&nbsp; <span class="cat">${m.categoria}</span> &nbsp;·&nbsp; ${m.tipo} &nbsp;·&nbsp; <b>${d.n_paginas}</b> páginas</div>
+          <div class="linha-meta">${[_autoresCurto(m,2), m.ano, m.periodico,
+              _vale(m.doi)?"DOI: <code>"+m.doi+"</code>":"",
+              _vale(m.categoria)?'<span class="cat">'+m.categoria+'</span>':"",
+              m.tipo, "<b>"+d.n_paginas+"</b> páginas"].filter(_vale).join(" &nbsp;·&nbsp; ")}</div>
           <div class="linha-descoberto ${ext?"on":""}" id="desc-${i}">
             Parser: <b>${d.n_paginas}</b> páginas · <b>${r.tabelas}</b> tabelas · <b>${r.figuras}</b> figuras · <b>${r.formulas}</b> fórmulas</div>
         </div>
@@ -1113,7 +1118,7 @@ function mostrarNaoExtraido(d, i){
     (fila?'Reenviar pedido de extração':'Solicitar extração')+'</button>'+
     '<div style="margin-top:14px;padding:10px 12px;background:#f8f8f8;border:1px solid var(--borda);border-radius:8px;font-size:11.5px;color:var(--cinza);line-height:1.6">'+
     'A extração precisa de GPU e roda no notebook (DocLayout-YOLO + Chandra OCR 2 + '+
-    'Docling + PyMuPDF). Este servidor não extrai — ele registra o pedido.</div></div>';
+    'Docling + PyMuPDF). Este servidor não extrai: ele registra o pedido.</div></div>';
   el("res-md").innerHTML=''; el("res-meta").innerHTML='';
   renderMeta(d);
   el("ex-page-inp").value=1; el("ex-total").textContent=d.n_paginas||0;
@@ -1127,7 +1132,7 @@ async function pedirExtracao(i){
     var r=await apiFetch(API+"/document/"+d.id+"/extrair",{method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({solicitado_por:USUARIO})});
-    if(!r.ok) throw new Error("HTTP "+r.status+" — "+(await r.text()).slice(0,120));
+    if(!r.ok) throw new Error("HTTP "+r.status+": "+(await r.text()).slice(0,120));
     d.na_fila=true; mostrarNaoExtraido(d,i);
   }catch(e){
     if(b){ b.disabled=false; b.textContent="Solicitar extração"; }
@@ -1181,7 +1186,7 @@ async function analisarSelecionados(){
   if(g.extraidos.length){
     abrirPainel("Já extraídos",
       '<p style="font-size:13px;line-height:1.7"><b>'+g.extraidos.length+'</b> dos selecionados já passaram pelo parser. '+
-      'Extrair de novo substituiria o resultado atual — e a curadoria feita à mão sobre eles.</p>'+
+      'Extrair de novo substituiria o resultado atual, e a curadoria feita à mão sobre eles.</p>'+
       listaNomes(g.extraidos)+
       (g.naoExtraidos.length ? '<div style="margin-top:14px;font-size:13px">Os outros <b>'+g.naoExtraidos.length+
         '</b> serão colocados na fila.</div>' : ''));
@@ -1427,7 +1432,7 @@ function marcarEstado(estado, extra){
     pendente:["alteração não salva","#b45309"],
     salvando:["salvando…","#6b7280"],
     salvo:["salvo"+(extra?" às "+String(extra).slice(11,16):""),"#15803d"],
-    espera:["limite atingido — salva em "+extra+"s","#b45309"],
+    espera:["limite atingido, salva em "+extra+"s","#b45309"],
     erro:["não salvou: "+(extra||""),"#b91c1c"]
   };
   var m=mapa[estado];
@@ -1529,7 +1534,7 @@ function _upTabela(itens){
     itens.map(function(it){
       var st=it._gravado?"gravado":it.situacao;
       var det=it._gravado ? (it.paginas+" pág, "+it.blocos+" blocos"+(it.figuras?", "+it.figuras+" figuras":"")) : (it.motivo||"");
-      return '<tr><td>'+esc(it.arquivo||it.slug||"?")+'</td><td>'+(it.paginas||"—")+'</td>'+
+      return '<tr><td>'+esc(it.arquivo||it.slug||"?")+'</td><td>'+(it.paginas||"-")+'</td>'+
              '<td><span class="up-st '+st+'">'+(_UP_ROT[st]||st)+'</span></td><td style="color:var(--cinza)">'+esc(det)+'</td></tr>';
     }).join("")+'</tbody></table>';
 }
@@ -1556,7 +1561,7 @@ async function upEscolher(f){
     var dup=it.filter(function(x){return x.situacao==="ja_extraido";}).length;
     var ruim=it.length-nov-dup;
     el("up-resultado").innerHTML=
-      '<div style="margin-top:16px;font-size:13px"><b>'+esc(f.name)+'</b>: '+it.length+' documento(s) — '+
+      '<div style="margin-top:16px;font-size:13px"><b>'+esc(f.name)+'</b>: '+it.length+' documento(s): '+
       '<b style="color:#1E5B31">'+nov+' novo(s)</b>, '+
       '<b style="color:#9a5b00">'+dup+' já extraído(s)</b>'+(ruim?', <b style="color:#b42318">'+ruim+' com problema</b>':'')+'</div>'+
       _upTabela(it)+
@@ -1662,7 +1667,7 @@ async function vetCarregarColecoes(escolher){
     }
     sel.innerHTML=VET_COLS.map(function(c){
       return '<option value="'+esc(c.nome)+'"'+(c.compativel?'':' disabled')+(c.nome===alvo?' selected':'')+'>'+
-        esc(c.nome)+' ('+c.pontos.toLocaleString("pt-BR")+' pontos)'+(c.teste?' [teste]':'')+(c.compativel?'':' — incompatível')+'</option>';
+        esc(c.nome)+' ('+c.pontos.toLocaleString("pt-BR")+' pontos)'+(c.teste?' [teste]':'')+(c.compativel?'':' (incompatível)')+'</option>';
     }).join("");
     VET_COL=alvo;
     await vetCarregarDocs();
@@ -1687,8 +1692,8 @@ async function vetCriarColecao(){
 }
 async function vetCarregarDocs(){
   var c=VET_COLS.filter(function(x){ return x.nome===VET_COL; })[0];
-  el("vet-badge-pontos").textContent=c?c.pontos.toLocaleString("pt-BR"):"—";
-  el("vet-badge-feitos").textContent="—"; vetResumoHero();
+  el("vet-badge-pontos").textContent=c?c.pontos.toLocaleString("pt-BR"):"-";
+  el("vet-badge-feitos").textContent="-"; vetResumoHero();
   el("vet-col-info").textContent=c?(c.teste?"coleção de teste":""):"";
   if(!VET_COL){ el("vet-docs").innerHTML='<div class="md-vazio">Nenhuma coleção compatível.</div>'; return; }
   el("vet-docs").innerHTML='<div class="md-vazio">Conferindo o que já está em '+esc(VET_COL)+'…</div>';
@@ -1747,7 +1752,7 @@ function vetRender(){
       return '<tr><td><input type="checkbox" data-id="'+esc(d.pdf_id)+'" '+(VET_SEL.has(d.pdf_id)?'checked ':'')+'onclick="vetSel(this)"></td>'+
         '<td><div style="font-weight:600">'+esc((d.titulo||d.arquivo).slice(0,110))+(d.editado?'<span class="vet-chip" title="tem correção manual; ela é que vai para o Qdrant">editado</span>':'')+'</div>'+
         '<div style="color:var(--cinza);font-size:11.5px">'+esc(d.arquivo)+'</div></td>'+
-        '<td>'+esc(d.ano||"—")+'</td><td>'+(d.paginas||"—")+'</td><td>'+_vetComo(d)+'</td></tr>';
+        '<td>'+esc(d.ano||"-")+'</td><td>'+(d.paginas||"-")+'</td><td>'+_vetComo(d)+'</td></tr>';
     }).join("")+'</tbody></table>';
   vetSelInfo();
 }
@@ -1799,7 +1804,7 @@ function _vetTabela(itens){
     itens.map(function(it){
       var st=it._gravado?"gravado":it.situacao;
       var det=it._gravado?(it.pontos+" pontos gravados"):(it.motivo||"");
-      return '<tr><td>'+esc(it.titulo||it.arquivo||"?")+'</td><td>'+(it.trechos||"—")+'</td>'+
+      return '<tr><td>'+esc(it.titulo||it.arquivo||"?")+'</td><td>'+(it.trechos||"-")+'</td>'+
         '<td><span class="up-st '+st+'">'+(_VET_ROT[st]||st)+'</span></td><td style="color:var(--cinza)">'+esc(det)+'</td></tr>';
     }).join("")+'</tbody></table>';
 }
@@ -1888,7 +1893,7 @@ async function vetConfirmar(){
 var _VET_CAP=null;
 function vetResumoHero(){
   var r=el("vet-resumo"); if(!r) return;
-  r.innerHTML='<span>coleção <b>'+esc(VET_COL||"—")+'</b></span>'+
+  r.innerHTML='<span>coleção <b>'+esc(VET_COL||"-")+'</b></span>'+
     '<span><b>'+esc(el("vet-badge-feitos").textContent)+'</b> PDFs vetorizados</span>'+
     '<span><b>'+esc(el("vet-badge-pontos").textContent)+'</b> pontos</span>'+
     '<span>este servidor: <b>'+esc(el("vet-badge-cpu").textContent)+'</b></span>';
@@ -1960,7 +1965,7 @@ function aplicarHeroAba(k){
 }
 function _horas(seg){ var m=Math.round(seg/60); return m<60? "~"+Math.max(1,m)+" min" : "~"+(m/60).toFixed(m<600?1:0).replace(".",",")+" h"; }
 function _ha(iso){
-  if(!iso) return "—";
+  if(!iso) return "-";
   var m=Math.round((Date.now()-new Date(iso).getTime())/60000);
   if(m<60) return "há "+Math.max(1,m)+" min";
   if(m<48*60) return "há "+Math.round(m/60)+" h";
@@ -2040,9 +2045,9 @@ function extRender(){
       return '<tr><td><input type="checkbox" data-id="'+esc(d.id)+'" '+(EXT_SEL.has(d.id)?'checked ':'')+'onclick="extSel(this)"></td>'+
         '<td><div style="font-weight:600">'+esc(((d.meta&&d.meta.titulo)||d.arquivo).slice(0,110))+'</div>'+
         '<div style="color:var(--cinza);font-size:11.5px">'+esc(d.arquivo)+'</div></td>'+
-        '<td>'+esc((d.meta&&d.meta.ano)||"—")+'</td><td>'+(d.n_paginas||"—")+'</td>'+
+        '<td>'+esc((d.meta&&d.meta.ano)||"-")+'</td><td>'+(d.n_paginas||"-")+'</td>'+
         '<td>'+(f ? '<span class="up-st solicitado">solicitado</span><div style="color:var(--cinza);font-size:11.5px;margin-top:3px">por '+
-                    esc(f.extraction_requested_by||"—")+', '+_quando(f.extraction_requested_at)+'</div>'
+                    esc(f.extraction_requested_by||"-")+', '+_quando(f.extraction_requested_at)+'</div>'
                   : '<span class="up-st nao">a extrair</span>')+'</td></tr>';
     }).join("")+'</tbody></table>';
   extSelInfo();
@@ -2078,7 +2083,7 @@ async function mostrarUltimaSync(){
     var r=await apiFetch(API+"/curadoria/ultima");
     if(!r.ok){ el_.textContent=""; return; }
     var j=await r.json();
-    if(j.nunca){ el_.textContent="nunca sincronizado — clique em Buscar novos"; return; }
+    if(j.nunca){ el_.textContent="nunca sincronizado: clique em Buscar novos"; return; }
     var res=j.resumo||{};
     if(res.aprovados){ TOTAL_CURADORIA=res.aprovados; renderHome(); }
     el_.textContent="última checagem "+_quando(j.quando)+
@@ -2118,7 +2123,7 @@ function curPainel(){
       novos.map(function(n,i){
         return '<tr><td><div style="font-weight:600">'+esc((n.titulo||n.arquivo).slice(0,90))+'</div>'+
           '<div style="color:var(--cinza);font-size:11.5px">'+esc(n.arquivo)+'</div></td>'+
-          '<td>'+esc(n.ano||"—")+'</td><td id="cur-s-'+i+'" style="white-space:nowrap">'+_curEstado(n,i)+'</td></tr>';
+          '<td>'+esc(n.ano||"-")+'</td><td id="cur-s-'+i+'" style="white-space:nowrap">'+_curEstado(n,i)+'</td></tr>';
       }).join("")+'</tbody></table>'+
       (pend>1?'<div class="up-acoes"><button class="up-btn" id="cur-todos" onclick="curRegistrarTodos()">Cadastrar todos ('+pend+')</button></div>':'')+
       '</div>';
@@ -2261,7 +2266,7 @@ async function editarIntegrante(uid){
   var cargo = prompt("Cargo (admin, curador ou leitor):", p.role||"curador");
   if(cargo===null) return;
   cargo = String(cargo).trim().toLowerCase();
-  var senha = prompt("Nova senha (deixe em branco para nao trocar):", "");
+  var senha = prompt("Nova senha (deixe em branco para não trocar):", "");
   if(senha===null) return;
   var corpo = {nome: nome.trim(), cargo: cargo};
   if(senha.trim()) corpo.senha = senha.trim();
@@ -2272,22 +2277,22 @@ async function editarIntegrante(uid){
     if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
     await carregarEquipe();
     abrirPainel("Integrante atualizado",
-      '<div style="font-size:13px;line-height:1.8"><b>'+esc(j.name||nome)+'</b> — '+esc(j.role||cargo)+'</div>'+
+      '<div style="font-size:13px;line-height:1.8"><b>'+esc(j.name||nome)+'</b> · '+esc(j.role||cargo)+'</div>'+
       (corpo.senha ? '<div style="margin-top:12px;padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;'+
         'border-radius:8px;font-size:12px;color:#7c2d12">A senha foi trocada. Passe a nova por um canal seguro.</div>' : ''));
   }catch(e){
-    abrirPainel("Nao deu para editar", '<p style="font-size:13px">'+esc(String(e.message||e))+'</p>');
+    abrirPainel("Não deu para editar", '<p style="font-size:13px">'+esc(String(e.message||e))+'</p>');
   }
 }
 async function removerIntegrante(uid, nome){
-  if(!confirm('Remover "'+nome+'"?\n\nA conta deixa de existir e a pessoa perde o acesso. Nao da para desfazer.')) return;
+  if(!confirm('Remover "'+nome+'"?\n\nA conta deixa de existir e a pessoa perde o acesso. Não dá para desfazer.')) return;
   try{
     var r = await apiFetch(API+"/equipe/"+uid, {method:"DELETE"});
     var j = await r.json();
     if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
     await carregarEquipe();
   }catch(e){
-    abrirPainel("Nao deu para remover", '<p style="font-size:13px">'+esc(String(e.message||e))+'</p>');
+    abrirPainel("Não deu para remover", '<p style="font-size:13px">'+esc(String(e.message||e))+'</p>');
   }
 }
 
@@ -2357,7 +2362,7 @@ function alternarMenuConta(ev){
   var abrir = m.style.display==="none";
   m.style.display = abrir ? "block" : "none";
   if(abrir){
-    el("mc-nome").textContent = USUARIO || "—";
+    el("mc-nome").textContent = USUARIO || "-";
     el("mc-email").textContent = MEU_EMAIL || "";
   }
 }
@@ -2370,7 +2375,7 @@ function pintarUsuario(){
   var av=document.querySelector(".sb-user .av");
   if(av) av.textContent=((USUARIO||"US").slice(0,2)).toUpperCase();
   var n=el("sb-nome"), sub=el("sb-sub");
-  if(n) n.textContent = USUARIO || "—";
+  if(n) n.textContent = USUARIO || "-";
   if(sub) sub.textContent = (CARGO||"") + (MEU_EMAIL ? " · " + MEU_EMAIL : "");
 }
 function abrirMinhaConta(){
@@ -2469,12 +2474,12 @@ async function carregarEquipe(){
       return '<div class="linha"><div style="display:flex;align-items:center;gap:12px;padding:14px 16px;flex:1">'+
         '<div style="width:34px;height:34px;border-radius:50%;background:'+c[1]+';color:'+c[0]+
         ';display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px">'+esc(ini)+'</div>'+
-        '<div><div class="linha-tit">'+esc(p.name||"-")+(eu?' <span style="font-size:11px;color:var(--cinza)">(voce)</span>':'')+'</div>'+
+        '<div><div class="linha-tit">'+esc(p.name||"-")+(eu?' <span style="font-size:11px;color:var(--cinza)">(você)</span>':'')+'</div>'+
         '<div class="linha-meta">'+esc(String(p.id||"").slice(0,8))+'...</div></div></div>'+
         '<div style="display:flex;align-items:center;gap:8px;padding-right:16px">'+acoes+
         '<span class="mini-chip" style="background:'+c[1]+';color:'+c[0]+'">'+
         esc(p.role||"leitor")+'</span></div></div>';
-    }).join("") : '<div class="md-vazio">Ninguem cadastrado.</div>';
+    }).join("") : '<div class="md-vazio">Ninguém cadastrado.</div>';
   }catch(e){
     lista.innerHTML='<div class="md-vazio">Nao deu para listar: '+esc(String(e.message||e))+'</div>';
   }
@@ -2483,7 +2488,7 @@ async function cadastrarIntegrante(){
   var b=el("eq-salvar"), erro=el("eq-erro");
   var corpo={ nome:el("eq-nome").value.trim(), email:el("eq-email").value.trim(),
               senha:el("eq-senha").value, cargo:el("eq-cargo").value };
-  if(!corpo.email || !corpo.senha){ erro.textContent="E-mail e senha sao obrigatorios."; return; }
+  if(!corpo.email || !corpo.senha){ erro.textContent="E-mail e senha são obrigatórios."; return; }
   if(corpo.senha.length<8){ erro.textContent="A senha precisa de pelo menos 8 caracteres."; return; }
   b.disabled=true; b.textContent="Cadastrando..."; erro.textContent="";
   try{
@@ -2498,8 +2503,8 @@ async function cadastrarIntegrante(){
       '<div style="font-size:13px;line-height:1.8"><b>'+esc(j.nome)+'</b> ('+esc(j.cargo)+')<br>'+
       esc(j.email)+'</div>'+
       '<div style="margin-top:12px;padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;font-size:12px;color:#7c2d12">'+
-      'Passe a senha provisoria por um canal seguro e peca para troca-la. '+
-      'Ela foi definida por voce e nao e enviada por e-mail.</div>');
+      'Passe a senha provisória por um canal seguro e peça para trocá-la. '+
+      'Ela foi definida por você e não é enviada por e-mail.</div>');
   }catch(e){ erro.textContent=String(e.message||e); }
   finally{ b.disabled=false; b.textContent="Cadastrar"; }
 }
@@ -2528,7 +2533,7 @@ function abrirPainel(titulo, html){
 }
 function fecharPainel(){ el("painel").style.display="none"; }
 function _quando(iso){
-  if(!iso) return "—";
+  if(!iso) return "-";
   var d=new Date(iso);
   return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
 }
@@ -2558,11 +2563,11 @@ async function abrirHistorico(){
       else if(l.detalhe) det=esc(JSON.stringify(l.detalhe).slice(0,70));
       return '<tr><td style="white-space:nowrap">'+_quando(l.criado_em)+'</td>'+
         '<td><span class="log-ev" style="color:'+m[1]+';background:'+m[2]+'">'+m[0]+'</span></td>'+
-        '<td>'+esc(l.ator||"—")+'</td>'+
+        '<td>'+esc(l.ator||"-")+'</td>'+
         '<td>'+esc(String(_nomeDoc(l.alvo)).slice(0,52))+'</td>'+
         '<td style="color:var(--cinza)">'+det+'</td></tr>';
     }).join("");
-    abrirPainel("Histórico — "+itens.length+" eventos",
+    abrirPainel("Histórico: "+itens.length+" eventos",
       '<table class="log-t"><thead><tr><th>Quando</th><th>Evento</th><th>Quem</th><th>Documento</th><th>Detalhe</th></tr></thead><tbody>'+linhas+'</tbody></table>');
   }catch(e){
     abrirPainel("Histórico", '<div class="md-vazio">Erro: '+esc(e.message)+'</div>');
@@ -2574,9 +2579,9 @@ async function abrirConfigs(){
   var docs=IDX.length, pgs=IDX.reduce(function(a,d){return a+(d.n_paginas||0);},0);
   function linha(k,v){ return '<div class="cfg-l"><span>'+k+'</span><b>'+esc(String(v))+'</b></div>'; }
   abrirPainel("Configurações",
-    linha("Usuário da sessão", USUARIO||"—")+
+    linha("Usuário da sessão", USUARIO||"-")+
     linha("API", location.origin+API)+
-    linha("Estado do servidor", saude.status||"—")+
+    linha("Estado do servidor", saude.status||"-")+
     linha("Documentos no acervo", docs)+
     linha("Páginas no acervo", pgs)+
     linha("Limite de edições", "5 por minuto, por documento")+
@@ -2735,7 +2740,7 @@ function renderMeta(d){
       <span class="k">Título</span><span class="v" style="font-weight:700">${m.titulo}</span>
       <span class="k">Autores</span><span class="v">${m.autores}</span>
       <span class="k">Ano</span><span class="v">${m.ano}</span>
-      <span class="k">Periódico</span><span class="v">${m.periodico} · vol. ${m.volume}</span>
+      <span class="k">Periódico</span><span class="v">${m.periodico}</span>
       <span class="k">Tipo</span><span class="v">${m.tipo}</span>
       <span class="k">DOI</span><span class="v"><code>${m.doi}</code></span>
       <span class="k">Categoria</span><span class="v"><span class="cat">${m.categoria}</span></span>
@@ -2758,7 +2763,7 @@ function adicionarBlocoMD(afterId){
   if(docAtual===null) return;
   var pg=_pgAtual||paginasDoAtual()[paginaAtual-1]; if(!pg) return;
   if(!pg.blocos) pg.blocos=[];
-  var novo={ tipo:"texto", md:"Novo trecho — clique 2× para editar", id:"add-"+Date.now(), bbox:null, _novo:true };
+  var novo={ tipo:"texto", md:"Novo trecho: clique 2× para editar", id:"add-"+Date.now(), bbox:null, _novo:true };
   var idx=-1; if(afterId){ for(var i=0;i<pg.blocos.length;i++){ if(pg.blocos[i].id===afterId){ idx=i; break; } } }
   if(idx>=0) pg.blocos.splice(idx+1,0,novo); else pg.blocos.push(novo);
   renderMD(pg); renderLegivel(pg); persistir(pg);

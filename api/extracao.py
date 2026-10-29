@@ -179,7 +179,7 @@ def conferir(sb, pasta: Path) -> list[dict]:
     """
     idx = pasta / "index.json"
     if not idx.exists():
-        raise ValueError("o pacote não tem index.json — não parece saída do extrator")
+        raise ValueError("o pacote não tem index.json: não parece saída do extrator")
     try:
         entradas = json.loads(idx.read_text(encoding="utf-8"))
     except Exception as e:
