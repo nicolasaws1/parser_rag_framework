@@ -49,7 +49,8 @@ NOME_DENSO = "vetor_denso"
 NOME_ESPARSO = "vetor_esparso"
 MODELOS = {"denso": MODELO_DENSO, "esparso": MODELO_ESPARSO}
 
-MAX_PACOTE = 100            # documentos por pacote
+MAX_PACOTE = 200            # documentos por pacote: só texto (111 deram 3,7 MB), mas montar
+                            # leva ~0,3 s por documento e o Cloudflare corta resposta em 100 s
 TAMANHO_MAXIMO = 600 * 2**20
 LOTE_UPSERT = 64
 _NOME_OK = re.compile(r"^[a-z0-9][a-z0-9_]{2,62}$")

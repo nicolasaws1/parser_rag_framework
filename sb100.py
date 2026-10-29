@@ -173,7 +173,7 @@ def main() -> None:
 
     v = sub.add_parser("vetorizar", help="pacote -> embeddings -> Qdrant -> confirmar")
     v.add_argument("--colecao", required=True, help="coleção do Qdrant (ex.: sb100)")
-    v.add_argument("--quantos", type=int, default=50, help="documentos no pacote (até 100)")
+    v.add_argument("--quantos", type=int, default=50, help="documentos no pacote (até 200)")
     v.add_argument("--lote", type=int, default=32, help="trechos por chamada ao modelo")
     v.add_argument("--via-site", action="store_true",
                    help="sem acesso ao Qdrant daqui: manda o zip para o site gravar")

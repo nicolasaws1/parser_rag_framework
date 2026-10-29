@@ -33,7 +33,7 @@ fica marcado como teste.
 ## Passo a passo (GPU)
 
 1. Aba **Vetorização**: escolha a coleção, marque os documentos (o filtro padrão
-   já mostra só os que faltam nela) e clique em **Baixar pacote**. Até 100 por pacote.
+   já mostra só os que faltam nela) e clique em **Baixar pacote**. Até 200 por pacote.
 2. Baixe o `vetorizador_lote.ipynb` no mesmo lugar e abra no Colab com GPU.
 3. Célula 2: envie o `pacote_….zip`. Célula 3: a chave do Qdrant e, se quiser,
    outra coleção em `COLECAO` (vazio usa a escolhida no site). Célula 4: calcula

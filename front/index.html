@@ -1662,7 +1662,7 @@ async function _upAcompanhar(tid, f, t0){
    grava no Qdrant. Tudo é relativo à coleção escolhida: "já vetorizado" quer
    dizer "já tem pontos NESTA coleção", inclusive os gravados pelos scripts
    antigos, que só deixaram o nome do arquivo no payload. */
-var VET_COL=null, VET_COLS=[], VET_DOCS=[], VET_SEL=new Set(), VET_FILTRO="nao", VET_PRE=null, _vetArq=null, _tVet=null, VET_MAX=100;
+var VET_COL=null, VET_COLS=[], VET_DOCS=[], VET_SEL=new Set(), VET_FILTRO="nao", VET_PRE=null, _vetArq=null, _tVet=null, VET_MAX=200;  // o mesmo MAX_PACOTE da API
 function irVetorizacao(pre){
   el("view-home").style.display="none"; el("view-extract").style.display="none";
   el("view-gpu").style.display="none"; el("view-equipe").style.display="none";
@@ -1846,6 +1846,12 @@ function vetSelInfo(){
      (ja?' <span style="color:#9a5b00">('+ja+' já estão nesta coleção e serão pulados, a menos que você peça para regravar)</span>':'')+
      (n>VET_MAX?' <span style="color:#b42318">máximo de '+VET_MAX+' por pacote</span>':''));
   var ok=n>0&&n<=VET_MAX;
+  // o aviso também vai para perto do botão: só embaixo da tabela, passava despercebido
+  var pi=el("vet-pacote-info");
+  if(pi && (n>VET_MAX || pi.dataset.limite)){
+    pi.innerHTML = n>VET_MAX ? '<span style="color:#b42318">São '+n+' selecionados; o máximo por pacote é '+VET_MAX+'. Desmarque alguns ou baixe em duas vezes.</span>' : "";
+    pi.dataset.limite = n>VET_MAX ? "1" : "";
+  }
   el("vet-btn-pacote").disabled=!ok;
   el("vet-btn-site").disabled=!ok||!(_VET_CAP&&_VET_CAP.pode);
 }
