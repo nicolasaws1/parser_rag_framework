@@ -1346,5 +1346,14 @@ def index():
     return FileResponse(WEB_DIR / "index.html")
 
 
+@app.get("/img/{nome}", include_in_schema=False)
+def imagem(nome: str):
+    """Logos e ícone, de front/img. Só nome simples de imagem: nada de subir pasta."""
+    arq = WEB_DIR / "img" / nome
+    if "/" in nome or "\\" in nome or arq.suffix.lower() not in (".png", ".svg", ".ico") or not arq.is_file():
+        raise HTTPException(404, "imagem não encontrada")
+    return FileResponse(arq, headers={"Cache-Control": "public, max-age=86400"})
+
+
 # o `/data` estático saiu junto com front/data: era a demo local de antes do
 # Supabase, e o front não referenciava nada de lá desde que passou a ler da API
