@@ -202,6 +202,11 @@ def main() -> None:
         print(f"{len(docs) - len(pendentes)} já calculado(s) numa sessão anterior\n")
 
     emb = carregar_embedder(a.lote) if pendentes else None
+    # o payload registra o modelo que calculou de fato; o do pacote é só o que o site espera
+    modelos = getattr(emb, "modelos", None) or man["modelos"]
+    if emb and modelos != man["modelos"]:
+        print(f"aviso: o pacote espera {man['modelos']}, mas este vetorizador usa {modelos}; "
+              "o payload registra o que foi usado\n")
     ingestao = datetime.now(timezone.utc).isoformat(timespec="seconds")
     t_total = time.time()
     for i, d in enumerate(pendentes, 1):
@@ -220,7 +225,7 @@ def main() -> None:
                 f.write(json.dumps({
                     "id": chunker.id_do_ponto(col, d["pdf_id"], c["indice"]),
                     "pdf_id": d["pdf_id"],
-                    "payload": chunker.montar_payload(c, d, col, man["modelos"], ingestao,
+                    "payload": chunker.montar_payload(c, d, col, modelos, ingestao,
                                                       ck["tamanho"], ck["sobreposicao"]),
                     "denso": dn, "esparso": es}, ensure_ascii=False) + "\n")
         tmp.replace(partes / f"{d['pdf_id']}.jsonl")

@@ -72,7 +72,10 @@ segue na mesma janela. O texto é o da tela Analisar, com as correções feitas 
 
 O payload mantém as chaves dos scripts antigos (`content`, `file`, `pagina_pdf`,
 `titulo`, `autores`, `ano`…) e acrescenta `pdf_id`, `paginas_pdf`, `blocos`,
-`origem_texto`, `versao_chunker` e os modelos. O id de cada ponto é fixo para
+`origem_texto`, `versao_chunker`, os modelos que calcularam os vetores, `ingestao`
+(quando os vetores foram gravados) e `extraido_em` (quando o documento foi
+extraído), as duas em UTC. As páginas são sempre as do PDF: `pagina_pdf` é onde
+está a maior parte do trecho, `paginas_pdf` todas as que ele toca. O id de cada ponto é fixo para
 (coleção, documento, trecho): regravar substitui, não duplica.
 
 ## Modelos

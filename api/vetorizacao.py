@@ -302,12 +302,19 @@ def _md(paginas: list[dict], titulo: str) -> str:
     return "\n".join(linhas)
 
 
+def _utc(quando: str | None) -> str:
+    """extracted_at é "timestamp" sem fuso, gravado em UTC pelo servidor: diz isso no texto."""
+    if not quando:
+        return ""
+    return quando if quando.endswith("Z") or quando[-6:-5] in "+-" else quando + "+00:00"
+
+
 def montar_pacote(sb, colecao: str, ids: list[str], quem: str) -> tuple[bytes, dict]:
     if not ids:
         raise ValueError("escolha ao menos um documento")
     if len(ids) > MAX_PACOTE:
         raise ValueError(f"no máximo {MAX_PACOTE} documentos por pacote")
-    pdfs = (sb.table("pdfs").select("id,pdf_file,total_pages,extracted,document_url")
+    pdfs = (sb.table("pdfs").select("id,pdf_file,total_pages,extracted,extracted_at,document_url")
             .in_("id", ids).execute().data)
     nao = [p["pdf_file"] for p in pdfs if not p["extracted"]]
     if nao:
@@ -335,7 +342,8 @@ def montar_pacote(sb, colecao: str, ids: list[str], quem: str) -> tuple[bytes, d
             man["documentos"].append({
                 "pdf_id": p["id"], "pdf_file": p["pdf_file"], "slug": slug,
                 "file": p.get("document_url") or p["pdf_file"],
-                "paginas": p["total_pages"], "origem_texto": origem, "metadados": m})
+                "paginas": p["total_pages"], "origem_texto": origem, "metadados": m,
+                "extraido_em": _utc(p.get("extracted_at"))})
         z.writestr("pacote.json", json.dumps(man, ensure_ascii=False, indent=1))
     return buf.getvalue(), {"pacote": pacote, "documentos": len(man["documentos"]),
                             "colecao": colecao}

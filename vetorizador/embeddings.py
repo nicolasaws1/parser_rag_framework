@@ -34,6 +34,8 @@ class Embedder:
         self.torch = torch
         self.dev = dispositivo or ("cuda" if torch.cuda.is_available() else "cpu")
         self.lote = lote
+        # vai para o payload de cada ponto: é o registro de qual modelo gerou o vetor
+        self.modelos = {"denso": MODELO_DENSO, "esparso": MODELO_ESPARSO}
         kw = {"torch_dtype": torch.float16} if self.dev == "cuda" else {}
         self._denso = SentenceTransformer(MODELO_DENSO, device=self.dev, model_kwargs=kw)
         self._tok = AutoTokenizer.from_pretrained(MODELO_ESPARSO)
