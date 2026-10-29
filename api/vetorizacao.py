@@ -92,15 +92,32 @@ def listar_colecoes() -> list[dict]:
     for n in sorted(nomes):
         info = _req("GET", f"/collections/{n}")["result"]
         ok, motivo = compativel(info)
+        meta = (info.get("config") or {}).get("metadata") or {}
         fora.append({"nome": n, "pontos": info.get("points_count") or 0,
                      "compativel": ok, "motivo": motivo,
-                     "teste": n.startswith("teste_")})
+                     "teste": n.startswith("teste_"), "info": meta})
     return fora
 
 
-def criar_colecao(nome: str) -> dict:
+DESCRICAO_MAX = 2000
+
+
+def _descricao(texto: str) -> str:
+    texto = (texto or "").strip()
+    if len(texto) < 10:
+        raise ValueError("escreva uma descrição para a coleção (pelo menos 10 caracteres)")
+    if len(texto) > DESCRICAO_MAX:
+        raise ValueError(f"descrição longa demais (máximo {DESCRICAO_MAX} caracteres)")
+    return texto
+
+
+def criar_colecao(nome: str, descricao: str = "", quem: str = "") -> dict:
+    """Cria a coleção e grava nela, como metadado do próprio Qdrant, a descrição
+    escrita por quem criou e o que já se sabe na hora: data, autor, modelos e
+    fatiamento. Fica junto da coleção, para quem a consultar de outro lugar."""
     if not _NOME_OK.match(nome or ""):
         raise ValueError("nome: 3 a 63 caracteres, só minúsculas, números e _")
+    descricao = _descricao(descricao)
     existentes = {c["name"] for c in _req("GET", "/collections")["result"]["collections"]}
     if nome in existentes:
         raise ValueError(f"a coleção {nome} já existe")
@@ -109,8 +126,27 @@ def criar_colecao(nome: str) -> dict:
         "sparse_vectors": {NOME_ESPARSO: {}},
     })
     _indices(nome)
+    info = {"descricao": descricao,
+            "criada_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "criada_por": quem, "modelo_denso": MODELO_DENSO, "modelo_esparso": MODELO_ESPARSO,
+            "chunk": chunker.TAMANHO, "sobreposicao": chunker.SOBREPOSICAO,
+            "versao_chunker": chunker.VERSAO}
+    _req("PATCH", f"/collections/{nome}", json={"metadata": info})
     return {"nome": nome, "pontos": 0, "compativel": True, "motivo": "",
-            "teste": nome.startswith("teste_")}
+            "teste": nome.startswith("teste_"), "info": info}
+
+
+def descrever_colecao(nome: str, descricao: str, quem: str = "") -> dict:
+    """Troca a descrição. O Qdrant junta o metadado novo com o que já havia,
+    então data de criação e modelos continuam lá."""
+    descricao = _descricao(descricao)
+    existentes = {c["name"] for c in _req("GET", "/collections")["result"]["collections"]}
+    if nome not in existentes:
+        raise ValueError(f"a coleção {nome} não existe")
+    _req("PATCH", f"/collections/{nome}", json={"metadata": {
+        "descricao": descricao, "descricao_editada_por": quem,
+        "descricao_editada_em": datetime.now(timezone.utc).isoformat(timespec="seconds")}})
+    return (_req("GET", f"/collections/{nome}")["result"].get("config") or {}).get("metadata") or {}
 
 
 def _indices(colecao: str) -> None:

@@ -828,6 +828,11 @@ VET_NOTEBOOK_URL = REPO_RAW + "vetorizador/vetorizador_lote.ipynb"
 
 class NovaColecao(BaseModel):
     nome: str
+    descricao: str = ""
+
+
+class DescricaoColecao(BaseModel):
+    descricao: str
 
 
 class PedidoPacote(BaseModel):
@@ -860,13 +865,27 @@ def vet_criar_colecao(nova: NovaColecao, pedido: Request):
     """Só admin: coleção nova é decisão de projeto, não de curadoria."""
     quem = auth.exigir_cargo(pedido, sb, "admin")
     try:
-        c = _qdrant_ou_502(_vet().criar_colecao, nova.nome.strip())
+        c = _qdrant_ou_502(_vet().criar_colecao, nova.nome.strip(), nova.descricao, quem["email"])
     except ValueError as e:
         raise HTTPException(400, str(e))
     registrar("documento_editado", quem["email"], None,
-              {"acao": "colecao_criada", "colecao": c["nome"]},
+              {"acao": "colecao_criada", "colecao": c["nome"], "descricao": c["info"]["descricao"]},
               pedido.client.host if pedido.client else None)
     return c
+
+
+@app.patch("/api/vetorizacao/colecoes/{nome}", tags=["vetorização"])
+def vet_descrever_colecao(nome: str, d: DescricaoColecao, pedido: Request):
+    """Só admin: troca a descrição da coleção (fica no próprio Qdrant)."""
+    quem = auth.exigir_cargo(pedido, sb, "admin")
+    try:
+        info = _qdrant_ou_502(_vet().descrever_colecao, nome, d.descricao, quem["email"])
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    registrar("documento_editado", quem["email"], None,
+              {"acao": "colecao_descrita", "colecao": nome, "descricao": info.get("descricao")},
+              pedido.client.host if pedido.client else None)
+    return {"nome": nome, "info": info}
 
 
 @app.get("/api/vetorizacao/documentos", tags=["vetorização"])

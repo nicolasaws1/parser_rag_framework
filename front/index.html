@@ -94,6 +94,10 @@
   .up-st.ja_vetorizado{background:#fff7e8;color:#9a5b00;}
   .up-st.nao{background:var(--cinza-bg);color:var(--cinza);}
   .up-st.legado{background:#eef2ff;color:#3730a3;}
+  .vet-desc{margin-top:10px;padding:10px 12px;background:var(--cinza-bg);border:1px solid var(--borda);border-radius:8px;font-size:12.5px;line-height:1.6;}
+  .vet-desc-txt{white-space:pre-wrap;}
+  .vet-desc-meta{color:var(--cinza);font-size:11.5px;margin-top:4px;}
+  .vet-txtarea{width:100%;min-height:70px;padding:8px 10px;border:1px solid var(--borda);border-radius:8px;font-family:inherit;font-size:13px;line-height:1.5;resize:vertical;background:#fff;}
   .up-prog{margin-top:16px;padding:14px 16px;border:1px solid var(--borda);border-radius:10px;background:var(--cinza-bg);font-size:12.5px;}
   .up-prog-tit{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#1a1a1a;}
   .up-prog-tit .spin-sm{border-color:#cfe3d4;border-top-color:var(--verde);}
@@ -708,10 +712,17 @@
         <select id="vet-col" onchange="vetTrocarColecao()"><option>carregando…</option></select>
         <span id="vet-col-info" style="font-size:12.5px;color:var(--cinza)"></span>
       </div>
-      <div class="vet-barra" id="vet-nova" style="display:none;margin-top:10px">
-        <input id="vet-nova-nome" placeholder="nova_colecao" maxlength="63" style="width:200px">
-        <button class="up-btn sec" onclick="vetCriarColecao()">Criar coleção</button>
-        <span style="font-size:11.5px;color:var(--cinza)">minúsculas, números e _; começar com <code>teste_</code> marca como teste</span>
+      <div id="vet-col-desc"></div>
+      <div id="vet-nova" style="display:none;margin-top:16px;padding-top:14px;border-top:1px solid var(--borda)">
+        <div style="font-weight:700;font-size:13px;margin-bottom:8px">Nova coleção</div>
+        <div class="vet-barra">
+          <input id="vet-nova-nome" placeholder="nova_colecao" maxlength="63" style="width:200px">
+          <span style="font-size:11.5px;color:var(--cinza)">minúsculas, números e _; começar com <code>teste_</code> marca como teste</span>
+        </div>
+        <textarea id="vet-nova-desc" class="vet-txtarea" maxlength="2000" style="margin-top:8px"
+          placeholder="Descrição: para que serve esta coleção. Ex.: coleção sb2, para testar a vetorização com o Qwen3-Embedding-0.6B em trechos de 1024 caracteres, com os artigos de citros e cana."></textarea>
+        <div style="font-size:11.5px;color:var(--cinza);margin-top:4px">A data, quem criou, os modelos e o tamanho dos trechos ficam registrados sozinhos junto com a descrição, na própria coleção do Qdrant.</div>
+        <button class="up-btn sec" onclick="vetCriarColecao()" style="margin-top:8px">Criar coleção</button>
       </div>
     </div>
 
@@ -1648,7 +1659,7 @@ function irVetorizacao(pre){
   aplicarHeroAba("vet");
   var pode=(CARGO!=="leitor");
   el("vet-acoes").style.display=pode?"block":"none";
-  el("vet-nova").style.display=(CARGO==="admin")?"flex":"none";
+  el("vet-nova").style.display=(CARGO==="admin")?"block":"none";
   if(pre && pre.length){ VET_PRE=pre; VET_FILTRO="todos"; }
   vetCarregarColecoes();
   vetCapacidade();
@@ -1680,22 +1691,63 @@ function vetTrocarColecao(){
   vetCarregarDocs();
 }
 async function vetCriarColecao(){
-  var nome=(el("vet-nova-nome").value||"").trim();
+  var nome=(el("vet-nova-nome").value||"").trim(), desc=(el("vet-nova-desc").value||"").trim();
   if(!nome) return;
+  if(desc.length<10){ alert("Escreva uma descrição para a coleção (pelo menos 10 caracteres)."); el("vet-nova-desc").focus(); return; }
   if(!confirm("Criar a coleção "+nome+" no Qdrant?")) return;
   try{
-    var r=await apiFetch(API+"/vetorizacao/colecoes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome:nome})});
+    var r=await apiFetch(API+"/vetorizacao/colecoes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome:nome, descricao:desc})});
     var j=await r.json(); if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
-    el("vet-nova-nome").value=""; VET_SEL.clear();
+    el("vet-nova-nome").value=""; el("vet-nova-desc").value=""; VET_SEL.clear();
     try{ localStorage.setItem("sb100_vet_col", j.nome); }catch(_){}
     await vetCarregarColecoes(j.nome);
   }catch(e){ alert("Não criou: "+e.message); }
+}
+/* Descrição da coleção escolhida: o texto de quem criou e o que foi
+   registrado sozinho (data, autor, modelos, fatiamento). Coleção antiga,
+   criada fora do site, não tem nada disso; o admin pode escrever agora. */
+function _dataBr(iso){ if(!iso) return ""; var d=new Date(iso); return isNaN(d)? "" : d.toLocaleDateString("pt-BR"); }
+function vetMostrarDescricao(editando){
+  var box=el("vet-col-desc"), c=VET_COLS.filter(function(x){ return x.nome===VET_COL; })[0];
+  if(!box) return;
+  if(!c){ box.innerHTML=""; return; }
+  var i=c.info||{}, admin=(CARGO==="admin");
+  if(editando){
+    box.innerHTML='<div class="vet-desc"><textarea id="vet-desc-ed" class="vet-txtarea" maxlength="2000">'+esc(i.descricao||"")+'</textarea>'+
+      '<div class="up-acoes" style="margin-top:8px"><button class="up-btn" id="vet-desc-salvar" onclick="vetSalvarDescricao()">Salvar descrição</button>'+
+      '<button class="up-btn sec" onclick="vetMostrarDescricao()">Cancelar</button></div></div>';
+    el("vet-desc-ed").focus(); return;
+  }
+  var partes=[];
+  if(i.criada_em) partes.push("criada em "+_dataBr(i.criada_em)+(i.criada_por?" por "+esc(i.criada_por):""));
+  if(i.modelo_denso) partes.push(esc(i.modelo_denso.split("/").pop())+" + "+esc(String(i.modelo_esparso||"").split("/").pop()));
+  if(i.chunk) partes.push("trechos de "+i.chunk+" caracteres ("+i.sobreposicao+" de sobreposição)");
+  if(i.descricao_editada_em) partes.push("descrição editada em "+_dataBr(i.descricao_editada_em)+(i.descricao_editada_por?" por "+esc(i.descricao_editada_por):""));
+  box.innerHTML='<div class="vet-desc">'+
+    (i.descricao ? '<div class="vet-desc-txt">'+esc(i.descricao)+'</div>'
+                 : '<div style="color:var(--cinza)"><i>Sem descrição.</i> Esta coleção foi criada fora do site'+(admin?'; escreva uma para quem for usá-la.':'.')+'</div>')+
+    (partes.length?'<div class="vet-desc-meta">'+partes.join(" · ")+'</div>':'')+
+    (admin?'<button class="up-btn sec" style="margin-top:8px" onclick="vetMostrarDescricao(true)">'+(i.descricao?'Editar descrição':'Escrever descrição')+'</button>':'')+
+    '</div>';
+}
+async function vetSalvarDescricao(){
+  var t=(el("vet-desc-ed").value||"").trim();
+  if(t.length<10){ alert("Escreva pelo menos 10 caracteres."); return; }
+  var b=el("vet-desc-salvar"); b.disabled=true; b.textContent="Salvando…";
+  try{
+    var r=await apiFetch(API+"/vetorizacao/colecoes/"+encodeURIComponent(VET_COL),{method:"PATCH",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({descricao:t})});
+    var j=await r.json(); if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    VET_COLS.forEach(function(c){ if(c.nome===j.nome) c.info=j.info; });
+    vetMostrarDescricao();
+  }catch(e){ b.disabled=false; b.textContent="Salvar descrição"; alert("Não salvou: "+e.message); }
 }
 async function vetCarregarDocs(){
   var c=VET_COLS.filter(function(x){ return x.nome===VET_COL; })[0];
   el("vet-badge-pontos").textContent=c?c.pontos.toLocaleString("pt-BR"):"-";
   el("vet-badge-feitos").textContent="-"; vetResumoHero();
   el("vet-col-info").textContent=c?(c.teste?"coleção de teste":""):"";
+  vetMostrarDescricao();
   if(!VET_COL){ el("vet-docs").innerHTML='<div class="md-vazio">Nenhuma coleção compatível.</div>'; return; }
   el("vet-docs").innerHTML='<div class="md-vazio">Conferindo o que já está em '+esc(VET_COL)+'…</div>';
   // a resposta de uma coleção trocada no meio do caminho chega depois e não
