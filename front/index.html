@@ -2221,19 +2221,28 @@ function remPainel(){
       '<div style="margin-top:12px;padding:10px 12px;background:#fdecec;border:1px solid #f5c2c2;border-radius:8px;font-size:12.5px;color:#7a1d14;line-height:1.6">'+
       '<b>Não tem volta.</b> Some o PDF, as páginas, os blocos, as correções feitas à mão e os metadados. '+
       'Se a curadoria ainda aprovar o documento, ele volta a aparecer como novo no <b>Buscar novos</b>.</div>'+
-      '<div class="up-acoes"><button class="up-btn perigo" id="rem-ir" onclick="remConfirmar()">Remover '+ok.length+' documento(s) definitivamente</button>'+
+      '<div style="margin-top:12px;font-size:12.5px">Para confirmar, digite <b>REMOVER</b>:</div>'+
+      '<input id="rem-palavra" autocomplete="off" spellcheck="false" oninput="remConferirPalavra()" '+
+      'onkeydown="remTecla(event)" '+
+      'style="margin-top:6px;width:220px;padding:8px 10px;border:1px solid #f0b4b4;border-radius:8px;font-family:inherit;font-size:13px;letter-spacing:.5px">'+
+      '<div class="up-acoes"><button class="up-btn perigo" id="rem-ir" onclick="remConfirmar()" disabled>Remover '+ok.length+' documento(s) definitivamente</button>'+
       '<button class="up-btn sec" onclick="fecharPainel()">Cancelar</button></div>';
   }
   abrirPainel("Remover "+REM.length+" documento(s)", html);
+  var c=el("rem-palavra"); if(c) c.focus();
 }
+/* o botão só libera com a palavra exata, em maiúsculas */
+function remConferirPalavra(){ var b=el("rem-ir"), c=el("rem-palavra"); if(b && c) b.disabled = c.value.trim()!=="REMOVER"; }
+function remTecla(e){ var b=el("rem-ir"); if(e.key==="Enter" && b && !b.disabled) remConfirmar(); }
 async function remConfirmar(){
+  if(!el("rem-palavra") || el("rem-palavra").value.trim()!=="REMOVER") return;
   var vet=el("rem-vet")?el("rem-vet").checked:true;
   var b=el("rem-ir"); if(b){ b.disabled=true; b.textContent="Removendo…"; }
   for(var k=0;k<REM.length;k++){
     var x=REM[k]; if(!x.resumo || x.feito) continue;
     var c=el("rem-s-"+k); if(c) c.innerHTML='<span class="spin-sm" style="display:inline-block;vertical-align:middle"></span> removendo…';
     try{
-      var r=await apiFetch(API+"/document/"+x.id+"?vetores="+(vet?"true":"false"),{method:"DELETE"});
+      var r=await apiFetch(API+"/document/"+x.id+"?vetores="+(vet?"true":"false")+"&confirmacao=REMOVER",{method:"DELETE"});
       var j=await r.json(); if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
       x.feito=true; x.erro=null;
     }catch(e){ x.erro=e.message; }

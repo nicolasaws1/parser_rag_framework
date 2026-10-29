@@ -458,10 +458,13 @@ def resumo_remocao(pdf_id: str, pedido: Request):
 
 
 @app.delete("/api/document/{pdf_id}", tags=["documentos"])
-def remover_documento(pdf_id: str, pedido: Request, vetores: bool = True):
+def remover_documento(pdf_id: str, pedido: Request, vetores: bool = True, confirmacao: str = ""):
     """Tira o documento do acervo, com páginas, imagens e (com vetores=true) os
-    pontos dele em todas as coleções. Só admin, e não tem volta."""
+    pontos dele em todas as coleções. Só admin, e não tem volta: exige
+    confirmacao=REMOVER, a mesma palavra que a tela pede para digitar."""
     quem = auth.exigir_cargo(pedido, sb, "admin")
+    if confirmacao != "REMOVER":
+        raise HTTPException(400, "para remover, envie confirmacao=REMOVER")
     limitar(pedido, "edicao", "remover-documento")
     from api import remocao
     try:
