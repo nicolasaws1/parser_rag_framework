@@ -2063,6 +2063,10 @@ async function mostrarUltimaSync(){
       (res.novos!=null ? " · "+res.novos+" novo(s) na curadoria" : "");
   }catch(e){ el_.textContent=""; }
 }
+/* O botão atualiza os metadados do que já está no banco e mostra o que falta.
+   Só conta o que a curadoria APROVOU; pendente e rejeitado ficam de fora. O
+   aprovado que falta se cadastra daqui: o servidor baixa o PDF da curadoria. */
+var CUR=null;
 async function sincronizarCuradoria(){
   var b=el("btn-sync"); if(b.disabled) return;
   b.disabled=true; var antes=b.textContent; b.textContent="Consultando…";
@@ -2070,24 +2074,76 @@ async function sincronizarCuradoria(){
     var r=await apiFetch(API+"/curadoria/sincronizar",{method:"POST"});
     var j=await r.json();
     if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
-    var lista = (j.novos_exemplos||[]).map(function(n){
-      return '<li style="margin:2px 0">'+esc(n)+'</li>'; }).join("");
-    abrirPainel("Curadoria — "+j.na_api+" artigos na API",
-      '<div style="font-size:13px;line-height:1.9">'+
-      '<div><b>'+j.aprovados+'</b> aprovados (não rejeitados)</div>'+
-      '<div><b>'+j.ja_conhecidos+'</b> já no banco — metadados atualizados: <b>'+j.atualizados+'</b></div>'+
-      '<div><b>'+j.novos+'</b> na curadoria e ainda não no banco</div></div>'+
-      (lista?'<div style="margin-top:12px;font-size:12.5px"><b>Novos:</b><ul style="margin:6px 0 0 18px;padding:0">'+lista+
-        (j.novos>25?'<li style="color:var(--cinza)">… e outros '+(j.novos-25)+'</li>':'')+'</ul></div>':'')+
-      '<div style="margin-top:14px;padding:10px 12px;background:#f8f8f8;border:1px solid var(--borda);border-radius:8px;font-size:11.5px;color:var(--cinza);line-height:1.6">'+
-      'Isto atualiza os <b>metadados</b> do que já está no banco e lista o que apareceu na curadoria. '+
-      'Registrar um documento novo depende do PDF em si, que vem por outro caminho.</div>');
+    CUR=j; curPainel();
     await carregarDocumentos(); renderHome(); mostrarUltimaSync();
   }catch(e){
     abrirPainel("Não deu para sincronizar",
       '<p style="font-size:13px">'+esc(String(e.message||e))+'</p>'+
       '<div style="margin-top:10px;font-size:12px;color:var(--cinza)">A API de curadoria pode estar fora do ar. Os documentos já no banco continuam disponíveis.</div>');
   }finally{ b.disabled=false; b.textContent=antes; }
+}
+function curPainel(){
+  var j=CUR, novos=j.novos_itens||[], conf=j.conflitos||[];
+  var st=Object.keys(j.por_status||{}).map(function(k){ return j.por_status[k]+' '+esc(k.toLowerCase()); }).join(" · ");
+  var pend=novos.filter(function(n){ return !n._feito; }).length;
+  var html='<div style="font-size:13px;line-height:1.9">'+
+      '<div style="color:var(--cinza);font-size:12px">Na curadoria: '+st+'</div>'+
+      '<div><b>'+j.aprovados+'</b> PDFs aprovados</div>'+
+      '<div><b>'+j.ja_conhecidos+'</b> já no banco, metadados atualizados: <b>'+j.atualizados+'</b></div>'+
+      '<div><b>'+j.novos+'</b> aprovados e ainda fora do banco</div></div>';
+  if(novos.length){
+    html+='<div style="margin-top:12px"><table class="up-tab"><thead><tr><th>Documento</th><th>Ano</th><th></th></tr></thead><tbody>'+
+      novos.map(function(n,i){
+        return '<tr><td><div style="font-weight:600">'+esc((n.titulo||n.arquivo).slice(0,90))+'</div>'+
+          '<div style="color:var(--cinza);font-size:11.5px">'+esc(n.arquivo)+'</div></td>'+
+          '<td>'+esc(n.ano||"—")+'</td><td id="cur-s-'+i+'" style="white-space:nowrap">'+_curEstado(n,i)+'</td></tr>';
+      }).join("")+'</tbody></table>'+
+      (pend>1?'<div class="up-acoes"><button class="up-btn" id="cur-todos" onclick="curRegistrarTodos()">Cadastrar todos ('+pend+')</button></div>':'')+
+      '</div>';
+  }
+  if(conf.length){
+    html+='<div style="margin-top:14px;padding:11px 13px;background:#fff7e8;border:1px solid #f5d9a8;border-radius:8px;font-size:12.5px;line-height:1.6;color:#7a4b00">'+
+      '<b>'+conf.length+' PDF(s) com mais de um artigo aprovado na curadoria.</b> O banco guarda um conjunto de metadados por PDF, '+
+      'então esses não foram atualizados nem podem ser cadastrados até alguém corrigir na curadoria '+
+      '(um registro por PDF, ou um PDF separado para cada capítulo).'+
+      conf.map(function(c){
+        return '<div style="margin-top:8px"><b>'+esc(c.arquivo)+'</b>'+(c.no_banco?' <span style="color:var(--cinza)">(já no banco)</span>':'')+
+          '<ul style="margin:3px 0 0 18px;padding:0">'+c.artigos.map(function(a){
+            return '<li>#'+esc(a.id)+' '+esc((a.titulo||"(sem título)").slice(0,80))+'</li>'; }).join("")+'</ul></div>';
+      }).join("")+'</div>';
+  }
+  html+='<div style="margin-top:14px;padding:10px 12px;background:#f8f8f8;border:1px solid var(--borda);border-radius:8px;font-size:11.5px;color:var(--cinza);line-height:1.6">'+
+    'Pendentes e rejeitados não entram. <b>Cadastrar</b> baixa o PDF da própria curadoria e o documento aparece na Home '+
+    'como a extrair, já com os metadados dela.</div>';
+  abrirPainel("Curadoria: "+j.na_api+" registros na API", html);
+}
+function _curEstado(n,i){
+  if(n._feito) return '<span class="up-st gravado">cadastrado</span> <span style="color:var(--cinza)">'+n._feito+'</span>';
+  if(n._erro) return '<span class="up-st erro" title="'+esc(n._erro)+'">falhou</span> <button class="up-btn sec" onclick="curRegistrar('+i+')">Tentar de novo</button>';
+  if(n._indo) return '<span class="spin-sm" style="display:inline-block;vertical-align:middle"></span> baixando…';
+  return '<button class="up-btn" onclick="curRegistrar('+i+')">Cadastrar</button>';
+}
+async function curRegistrar(i, emLote){
+  var n=CUR.novos_itens[i]; if(!n || n._feito || n._indo) return;
+  n._indo=true; n._erro=null; el("cur-s-"+i).innerHTML=_curEstado(n,i);
+  try{
+    var r=await apiFetch(API+"/curadoria/registrar",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({arquivo:n.arquivo})});
+    var j=await r.json();
+    if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+    n._feito=j.paginas+" pág, "+j.mb+" MB";
+    if(!emLote) carregarDocumentos().then(renderHome);
+  }catch(e){ n._erro=e.message; }
+  n._indo=false;
+  var c=el("cur-s-"+i); if(c) c.innerHTML=_curEstado(n,i);
+  if(n._erro && c) c.insertAdjacentHTML("beforeend",'<div style="color:#b42318;font-size:11.5px;white-space:normal;max-width:240px">'+esc(n._erro)+'</div>');
+  return !n._erro;
+}
+async function curRegistrarTodos(){
+  var b=el("cur-todos"); if(b){ b.disabled=true; b.textContent="Cadastrando…"; }
+  for(var i=0;i<CUR.novos_itens.length;i++){ if(!CUR.novos_itens[i]._feito) await curRegistrar(i, true); }
+  if(b) b.style.display="none";
+  await carregarDocumentos(); renderHome();
 }
 
 

@@ -1022,10 +1022,34 @@ def curadoria_sincronizar(pedido: Request, gravar: bool = True):
         resumo = curadoria.sincronizar(sb, gravar=gravar)
     except Exception as e:
         raise HTTPException(502, f"não deu para falar com a API de curadoria: {e}")
+    # o histórico guarda os números; as listas só interessam a quem clicou
     registrar("metadados_sincronizados", quem["email"], None,
-              {k: v for k, v in resumo.items() if k != "novos_exemplos"},
+              {k: v for k, v in resumo.items() if not isinstance(v, list)},
               pedido.client.host if pedido.client else None)
     return resumo
+
+
+class NovoDaCuradoria(BaseModel):
+    arquivo: str          # o documentUrl da curadoria
+
+
+@app.post("/api/curadoria/registrar", tags=["curadoria"])
+def curadoria_registrar(ped: NovoDaCuradoria, pedido: Request):
+    """Cadastra um aprovado que faltava: o PDF vem da própria curadoria, e o
+    documento entra como "a extrair". Quem clica não precisa ter o arquivo."""
+    quem = auth.exigir_cargo(pedido, sb, "admin", "curador")
+    limitar(pedido, "edicao", "curadoria-registrar")
+    from api import curadoria
+    try:
+        r = curadoria.registrar_novo(sb, ped.arquivo)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    except Exception as e:
+        raise HTTPException(502, f"não deu para buscar na curadoria: {e}")
+    registrar("pdf_ingerido", quem["email"], r["pdf_id"],
+              {"origem": "curadoria", "arquivo": ped.arquivo, "paginas": r["paginas"]},
+              pedido.client.host if pedido.client else None)
+    return r
 
 
 # ── equipe (login e cadastro interno) ────────────────────────────────────────
