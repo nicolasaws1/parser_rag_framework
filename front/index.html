@@ -94,6 +94,11 @@
   .up-st.ja_vetorizado{background:#fff7e8;color:#9a5b00;}
   .up-st.nao{background:var(--cinza-bg);color:var(--cinza);}
   .up-st.legado{background:#eef2ff;color:#3730a3;}
+  .vet-mais{width:34px;height:34px;border-radius:50%;border:1px solid var(--verde);background:#fff;color:var(--verde);
+    font-size:22px;line-height:1;font-weight:400;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+    transition:transform .15s,background .15s,color .15s;padding:0 0 2px;}
+  .vet-mais:hover{background:var(--verde);color:#fff;}
+  .vet-mais.aberto{transform:rotate(45deg);background:var(--verde);color:#fff;}
   .vet-desc{margin-top:10px;padding:10px 12px;background:var(--cinza-bg);border:1px solid var(--borda);border-radius:8px;font-size:12.5px;line-height:1.6;}
   .vet-desc-txt{white-space:pre-wrap;}
   .vet-desc-meta{color:var(--cinza);font-size:11.5px;margin-top:4px;}
@@ -710,6 +715,7 @@
         <code>vetor_esparso</code> aparece desabilitada: os vetores daqui não cabem nela.</div>
       <div class="vet-barra">
         <select id="vet-col" onchange="vetTrocarColecao()"><option>carregando…</option></select>
+        <button class="vet-mais" id="vet-mais" onclick="vetNovaAbrir()" title="Criar uma coleção nova" aria-label="Criar uma coleção nova" style="display:none">+</button>
         <span id="vet-col-info" style="font-size:12.5px;color:var(--cinza)"></span>
       </div>
       <div id="vet-col-desc"></div>
@@ -722,7 +728,10 @@
         <textarea id="vet-nova-desc" class="vet-txtarea" maxlength="2000" style="margin-top:8px"
           placeholder="Descrição: para que serve esta coleção. Ex.: coleção sb2, para testar a vetorização com o Qwen3-Embedding-0.6B em trechos de 1024 caracteres, com os artigos de citros e cana."></textarea>
         <div style="font-size:11.5px;color:var(--cinza);margin-top:4px">A data, quem criou, os modelos e o tamanho dos trechos ficam registrados sozinhos junto com a descrição, na própria coleção do Qdrant.</div>
-        <button class="up-btn sec" onclick="vetCriarColecao()" style="margin-top:8px">Criar coleção</button>
+        <div class="up-acoes" style="margin-top:8px">
+          <button class="up-btn" onclick="vetCriarColecao()">Criar coleção</button>
+          <button class="up-btn sec" onclick="vetNovaAbrir(false)">Cancelar</button>
+        </div>
       </div>
     </div>
 
@@ -1659,7 +1668,8 @@ function irVetorizacao(pre){
   aplicarHeroAba("vet");
   var pode=(CARGO!=="leitor");
   el("vet-acoes").style.display=pode?"block":"none";
-  el("vet-nova").style.display=(CARGO==="admin")?"block":"none";
+  el("vet-mais").style.display=(CARGO==="admin")?"inline-flex":"none";
+  vetNovaAbrir(false);
   if(pre && pre.length){ VET_PRE=pre; VET_FILTRO="todos"; }
   vetCarregarColecoes();
   vetCapacidade();
@@ -1690,6 +1700,15 @@ function vetTrocarColecao(){
   try{ localStorage.setItem("sb100_vet_col", VET_COL); }catch(_){}
   vetCarregarDocs();
 }
+/* o formulário de coleção nova fica escondido; o + abre e fecha */
+function vetNovaAbrir(abrir){
+  var f=el("vet-nova"), b=el("vet-mais");
+  if(abrir===undefined) abrir = f.style.display==="none";
+  if(abrir && CARGO!=="admin") return;
+  f.style.display = abrir ? "block" : "none";
+  if(b){ b.classList.toggle("aberto", abrir); b.title = abrir ? "Fechar" : "Criar uma coleção nova"; }
+  if(abrir) el("vet-nova-nome").focus();
+}
 async function vetCriarColecao(){
   var nome=(el("vet-nova-nome").value||"").trim(), desc=(el("vet-nova-desc").value||"").trim();
   if(!nome) return;
@@ -1698,7 +1717,7 @@ async function vetCriarColecao(){
   try{
     var r=await apiFetch(API+"/vetorizacao/colecoes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome:nome, descricao:desc})});
     var j=await r.json(); if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
-    el("vet-nova-nome").value=""; el("vet-nova-desc").value=""; VET_SEL.clear();
+    el("vet-nova-nome").value=""; el("vet-nova-desc").value=""; VET_SEL.clear(); vetNovaAbrir(false);
     try{ localStorage.setItem("sb100_vet_col", j.nome); }catch(_){}
     await vetCarregarColecoes(j.nome);
   }catch(e){ alert("Não criou: "+e.message); }
