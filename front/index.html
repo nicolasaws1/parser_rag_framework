@@ -492,7 +492,6 @@
         <div class="home-badge"><div class="n" id="badge-curad">—</div><div class="l">Aprovados na curadoria</div></div>
         <div class="home-badge"><div class="n" id="badge-total">0</div><div class="l" id="badge-total-l">Baixados aqui</div></div>
         <div class="home-badge"><div class="n" id="badge-ext">0</div><div class="l">Extraídos (parser)</div></div>
-        <div class="home-badge"><div class="n" id="badge-vet">0</div><div class="l">Vetorizados (Qdrant)</div></div>
       </div>
       <div id="hero-resumo" class="hero-resumo"></div>
     </div>
@@ -693,7 +692,7 @@
          vetores no Qdrant. Cada coleção é um índice à parte: um documento pode estar numa e faltar em outra,
          então tudo aqui é sempre em relação à coleção escolhida.</p>
       <div class="home-badges hero-oculta">
-        <div class="home-badge"><div class="n" id="vet-badge-feitos">—</div><div class="l">Nesta coleção</div></div>
+        <div class="home-badge"><div class="n" id="vet-badge-feitos">—</div><div class="l">PDFs vetorizados nela</div></div>
         <div class="home-badge"><div class="n" id="vet-badge-pontos">—</div><div class="l">Pontos na coleção</div></div>
         <div class="home-badge"><div class="n" id="vet-badge-cpu">—</div><div class="l">Este servidor</div></div>
       </div>
@@ -1018,7 +1017,6 @@ function renderHome(){
   el("badge-total").textContent = TOTAL_CURADORIA ? (noBanco+" de "+TOTAL_CURADORIA) : String(noBanco);
   el("badge-total-l").textContent = "Baixados aqui"+(nFora ? " (+"+nFora+" rejeitado"+(nFora>1?"s":"")+" na curadoria)" : "");
   el("badge-ext").textContent   = extraidos.size+" de "+noBanco;
-  el("badge-vet").textContent   = vetorizados.size+" de "+noBanco;
   const lista = el("lista"); lista.innerHTML="";
   lista.className = "lista" + (viewMode==="grade" ? " grade" : "");
   el("view-home").classList.toggle("grade-mode", viewMode==="grade");
@@ -1709,10 +1707,10 @@ async function vetCarregarDocs(){
     if(VET_SEL.size) VET_FILTRO="nao";
   }
   var feitos=VET_DOCS.filter(function(d){ return d.vetorizado; }).length;
-  el("vet-badge-feitos").textContent=feitos+" de "+VET_DOCS.length;
+  el("vet-badge-feitos").textContent=feitos;
   vetResumoHero();
   el("uso-col").textContent=VET_COL;
-  el("uso-txt").textContent=feitos+" de "+VET_DOCS.length+" extraídos nela";
+  el("uso-txt").textContent=feitos+" PDF"+(feitos===1?"":"s")+" vetorizado"+(feitos===1?"":"s")+" nela";
   el("uso-barra").style.width=(VET_DOCS.length?Math.round(100*feitos/VET_DOCS.length):0)+"%";
   vetFiltro(VET_FILTRO);
   if(CARGO!=="leitor") vetCarregarPendentes();
@@ -1891,7 +1889,7 @@ var _VET_CAP=null;
 function vetResumoHero(){
   var r=el("vet-resumo"); if(!r) return;
   r.innerHTML='<span>coleção <b>'+esc(VET_COL||"—")+'</b></span>'+
-    '<span><b>'+esc(el("vet-badge-feitos").textContent)+'</b> extraídos nela</span>'+
+    '<span><b>'+esc(el("vet-badge-feitos").textContent)+'</b> PDFs vetorizados</span>'+
     '<span><b>'+esc(el("vet-badge-pontos").textContent)+'</b> pontos</span>'+
     '<span>este servidor: <b>'+esc(el("vet-badge-cpu").textContent)+'</b></span>';
 }
@@ -2316,8 +2314,7 @@ function resumoHero(){
     (TOTAL_CURADORIA ? '<span><b>'+noBanco+'</b> de '+TOTAL_CURADORIA+' baixados</span>' :
                        '<span><b>'+noBanco+'</b> documentos</span>')+
     (nFora ? '<span><b>'+nFora+'</b> rejeitado'+(nFora>1?'s':'')+' na curadoria</span>' : '')+
-    '<span><b>'+extraidos.size+'</b> extraídos</span>'+
-    '<span><b>'+vetorizados.size+'</b> vetorizados</span>';
+    '<span><b>'+extraidos.size+'</b> extraídos</span>';
 }
 function buscar(v){
   BUSCA=(v||"").trim().toLowerCase();
