@@ -219,8 +219,10 @@ def status_documentos(sb, colecao: str) -> list[dict]:
     """Documentos extraídos e a situação de cada um NESTA coleção."""
     pontos = pontos_por_documento(sb, colecao)
     novos = _NOVOS.get(colecao, {})
-    pdfs = (sb.table("pdfs").select("id,pdf_file,total_pages,extracted,document_url")
+    from api.curadoria import fora_do_fluxo
+    pdfs = (sb.table("pdfs").select("id,pdf_file,total_pages,extracted,document_url,curation_status")
             .eq("extracted", True).execute().data)
+    pdfs = [p for p in pdfs if not fora_do_fluxo(p.get("curation_status"))]
     ids = [p["id"] for p in pdfs]
     metas = {m["pdf_id"]: m for m in sb.table("article_metadata")
              .select("pdf_id,title,year,category").in_("pdf_id", ids).execute().data}

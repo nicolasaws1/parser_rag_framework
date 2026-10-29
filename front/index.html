@@ -238,6 +238,13 @@
   .cfg-l{display:flex;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid #f1f1f1;font-size:13px;}
   .cfg-l span:first-child{color:var(--cinza);}
   .mini-chip.fila{background:#fef3c7;color:#92400e;}
+  .mini-chip.rej{background:#fdecec;color:#b42318;}
+  .stg.rej .ico{background:#fdecec;color:#b42318;font-weight:700;font-size:13px;}
+  .stg.rej .txt{color:#b42318;font-weight:600;}
+  .btn-remover{padding:8px 14px;border:1px solid #f0b4b4;border-radius:9px;background:#fff;color:#b42318;
+    font-weight:700;font-size:12.5px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px;}
+  .btn-remover:disabled{border-color:#e3e3e3;color:#9b9b9b;cursor:default;}
+  .up-btn.perigo{background:#b42318;}
   .sb-user{cursor:pointer;transition:background .12s;}
   .sb-user:hover{background:var(--cinza-bg);}
   .menu-conta{position:absolute;bottom:74px;left:12px;right:12px;z-index:500;background:#fff;border:1px solid var(--borda);
@@ -483,7 +490,7 @@
          — o parser (DocLayout-YOLO + Chandra OCR) é quem descobre páginas, tabelas, figuras e fórmulas.</p>
       <div class="home-badges" id="hero-badges">
         <div class="home-badge"><div class="n" id="badge-curad">—</div><div class="l">Aprovados na curadoria</div></div>
-        <div class="home-badge"><div class="n" id="badge-total">0</div><div class="l">Baixados aqui</div></div>
+        <div class="home-badge"><div class="n" id="badge-total">0</div><div class="l" id="badge-total-l">Baixados aqui</div></div>
         <div class="home-badge"><div class="n" id="badge-ext">0</div><div class="l">Extraídos (parser)</div></div>
         <div class="home-badge"><div class="n" id="badge-vet">0</div><div class="l">Vetorizados (Qdrant)</div></div>
       </div>
@@ -542,6 +549,13 @@
                stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/>
           <path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
           Vetorizar (Qdrant)</button>
+        <button class="btn-remover" id="btn-remover" onclick="removerSelecionados()" disabled style="display:none"
+                title="Tira os documentos do acervo, com páginas, imagens e vetores">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+               stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          Remover</button>
       </div>
     </div>
     <div class="lista-head">
@@ -847,6 +861,9 @@ function _slugDe(f){ return String(f||"").replace(/\.pdf$/i,""); }
 /* extracted_at é "timestamp" sem fuso e o servidor grava em UTC; sem o Z o
    navegador leria como horário de Brasília, 3 h adiantado */
 function _utc(iso){ return !iso ? null : (/(Z|[+-]\d\d:?\d\d)$/i.test(iso) ? iso : iso+"Z"); }
+/* mesma regra de api/curadoria.py: sem status (anterior à curadoria) vale; com
+   status, só "Aprovado..." segue para extração e vetorização */
+function foraDoFluxo(st){ st=String(st||"").trim().toLowerCase(); return !!st && st.indexOf("aprovad")!==0; }
 function _meta(m){
   m = m || {};
   return { titulo:m.title||"(sem título)", autores:m.authors||"—", ano:m.year||"—",
@@ -876,7 +893,8 @@ async function carregarDocumentos(){
     resumo:d.resumo||{tabelas:0,figuras:0,formulas:0},
     aprovado:d.approved, extraido:d.extracted, vetorizado:d.vectorized,
     criado_em:d.created_at||null, extraido_em:_utc(d.extracted_at),
-    na_fila:!!d.extraction_requested_at
+    na_fila:!!d.extraction_requested_at,
+    curadoria:d.curation_status||"", fora:foraDoFluxo(d.curation_status)
   }));
   // o painel mostrava "0 EXTRAIDOS" mesmo com tudo extraido: os conjuntos
   // nasciam vazios e so' eram preenchidos ao abrir um documento na sessao
@@ -993,9 +1011,12 @@ function renderHome(){
   // "16/230 aprovados" dava a entender que so' 16 foram aprovados. O total da
   // curadoria virou indicador proprio, e os demais mostram progresso sobre o
   // que de fato esta' aqui.
-  var noBanco=IDX.length;
+  // documento que a curadoria deixou de aprovar fica no banco, marcado, mas
+  // não conta como baixado: senão dava "230 de 227"
+  var noBanco=IDX.filter(function(d){ return !d.fora; }).length, nFora=IDX.length-noBanco;
   el("badge-curad").textContent = TOTAL_CURADORIA || "—";
   el("badge-total").textContent = TOTAL_CURADORIA ? (noBanco+" de "+TOTAL_CURADORIA) : String(noBanco);
+  el("badge-total-l").textContent = "Baixados aqui"+(nFora ? " (+"+nFora+" rejeitado"+(nFora>1?"s":"")+" na curadoria)" : "");
   el("badge-ext").textContent   = extraidos.size+" de "+noBanco;
   el("badge-vet").textContent   = vetorizados.size+" de "+noBanco;
   const lista = el("lista"); lista.innerHTML="";
@@ -1022,7 +1043,7 @@ function renderHome(){
           <div class="card-g-meta">${(m.autores||"").split(",")[0]} et al. · ${m.ano} · ${m.periodico} · <b>${d.n_paginas}</b> páginas</div>
           <div class="card-g-chips">
             <span class="mini-chip cat">${m.categoria}</span>
-            ${ext?'<span class="mini-chip ok">extraído</span>':(d.na_fila?'<span class="mini-chip fila">na fila</span>':'')}${vet?'<span class="mini-chip vet">vetorizado</span>':''}
+            ${ext?'<span class="mini-chip ok">extraído</span>':(d.na_fila?'<span class="mini-chip fila">na fila</span>':'')}${vet?'<span class="mini-chip vet">vetorizado</span>':''}${d.fora?'<span class="mini-chip rej" title="Status na curadoria: '+esc(d.curadoria)+'. Não vai para extração nem vetorização.">'+esc(d.curadoria.toLowerCase())+' na curadoria</span>':''}
           </div>
           <button class="btn-abrir" onclick="abrirDoc(${i})" title="Abrir">Abrir
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
@@ -1042,7 +1063,9 @@ function renderHome(){
             Parser: <b>${d.n_paginas}</b> páginas · <b>${r.tabelas}</b> tabelas · <b>${r.figuras}</b> figuras · <b>${r.formulas}</b> fórmulas</div>
         </div>
         <div class="stages" id="stages-${i}">
-          <div class="stg s1 on"><div class="ico">${ICO_APROV}</div><div class="txt">Aprovado<br>Squad 1</div></div>
+          ${d.fora
+            ? `<div class="stg s1 rej" title="Status na curadoria: ${esc(d.curadoria)}. Não vai para extração nem vetorização."><div class="ico">✕</div><div class="txt">${esc(d.curadoria)}<br>Squad 1</div></div>`
+            : `<div class="stg s1 on"><div class="ico">${ICO_APROV}</div><div class="txt">Aprovado<br>Squad 1</div></div>`}
           <span class="stg-seta">›</span>
           <div class="stg s2 ${ext?"on":""}"><div class="ico">${ICO_EXTR}</div><div class="txt">Extraído<br>parser</div></div>
           <span class="stg-seta">›</span>
@@ -1063,7 +1086,8 @@ function selecionarTodos(elc){ docsVisiveis().forEach(function(i){ if(elc.checke
 function atualizarSelInfo(){ const n=selecionados.size;
   el("sel-info").textContent = n===0?"Nenhum selecionado":(n===1?"1 selecionado":n+" selecionados");
   el("btn-parser").disabled = (n===0||parserRodando);
-  var bv=el("btn-vet-lista"); if(bv) bv.disabled = (n===0||parserRodando); }
+  var bv=el("btn-vet-lista"); if(bv) bv.disabled = (n===0||parserRodando);
+  var br=el("btn-remover"); if(br){ br.style.display=(CARGO==="admin")?"inline-flex":"none"; br.disabled=(n===0||parserRodando); } }
 
 
 /* Documento aprovado mas ainda sem extracao: nao ha' pagina nem bloco para
@@ -1963,7 +1987,7 @@ async function extCarregar(){
 }
 /* pendentes: solicitados primeiro (o pedido mais antigo antes), depois os menores */
 function extPendentes(){
-  return IDX.filter(function(d){ return !d.extraido; }).sort(function(a,b){
+  return IDX.filter(function(d){ return !d.extraido && !d.fora; }).sort(function(a,b){
     var fa=EXT_FILA[a.id], fb=EXT_FILA[b.id];
     if(!!fa!==!!fb) return fa?-1:1;
     if(fa&&fb) return String(fa.extraction_requested_at).localeCompare(String(fb.extraction_requested_at));
@@ -2112,6 +2136,15 @@ function curPainel(){
             return '<li>#'+esc(a.id)+' '+esc((a.titulo||"(sem título)").slice(0,80))+'</li>'; }).join("")+'</ul></div>';
       }).join("")+'</div>';
   }
+  var fora=j.fora_da_curadoria||[];
+  if(fora.length){
+    html+='<div style="margin-top:14px;padding:11px 13px;background:#fdecec;border:1px solid #f5c2c2;border-radius:8px;font-size:12.5px;line-height:1.6;color:#7a1d14">'+
+      '<b>'+fora.length+' documento(s) no banco que a curadoria não aprova mais.</b> Ficam marcados na Home e fora da extração e da '+
+      'vetorização. Para tirá-los de vez, selecione na Home e use <b>Remover</b>.'+
+      '<ul style="margin:6px 0 0 18px;padding:0">'+fora.map(function(f){
+        return '<li>'+esc((f.titulo||f.arquivo).slice(0,80))+' <span style="color:var(--cinza)">(#'+esc(f.id)+', '+esc(f.status.toLowerCase())+')</span></li>';
+      }).join("")+'</ul></div>';
+  }
   html+='<div style="margin-top:14px;padding:10px 12px;background:#f8f8f8;border:1px solid var(--borda);border-radius:8px;font-size:11.5px;color:var(--cinza);line-height:1.6">'+
     'Pendentes e rejeitados não entram. <b>Cadastrar</b> baixa o PDF da própria curadoria e o documento aparece na Home '+
     'como a extrair, já com os metadados dela.</div>';
@@ -2144,6 +2177,70 @@ async function curRegistrarTodos(){
   for(var i=0;i<CUR.novos_itens.length;i++){ if(!CUR.novos_itens[i]._feito) await curRegistrar(i, true); }
   if(b) b.style.display="none";
   await carregarDocumentos(); renderHome();
+}
+
+
+/* ── remover documentos (só admin) ──
+   Primeiro pergunta ao servidor o que cada um leva junto (páginas, blocos,
+   imagens e pontos no Qdrant), mostra, e só então apaga. Não tem volta. */
+var REM=[];
+async function removerSelecionados(){
+  if(CARGO!=="admin" || !selecionados.size) return;
+  REM=Array.from(selecionados).map(function(i){ return {id:IDX[i].id, titulo:(IDX[i].meta&&IDX[i].meta.titulo)||IDX[i].arquivo, arquivo:IDX[i].arquivo}; });
+  abrirPainel("Remover "+REM.length+" documento(s)",
+    '<div class="up-prog" style="margin-top:0"><div class="up-prog-tit"><span class="spin-sm"></span>Conferindo o que vai junto…</div>'+
+    '<div class="up-prog-barra indef"><span></span></div><div class="up-prog-det"><span>inclui contar os vetores em cada coleção do Qdrant; a primeira vez leva uns 30 s</span></div></div>');
+  for(var k=0;k<REM.length;k++){
+    try{
+      var r=await apiFetch(API+"/document/"+REM[k].id+"/remocao"); var j=await r.json();
+      if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+      REM[k].resumo=j;
+    }catch(e){ REM[k].erro=e.message; }
+  }
+  remPainel();
+}
+function _remVetores(v){
+  var ks=Object.keys(v||{}); if(!ks.length) return '<span style="color:var(--cinza)">nenhum</span>';
+  return ks.map(function(c){ return '<b>'+v[c].toLocaleString("pt-BR")+'</b> em '+esc(c); }).join("<br>");
+}
+function remPainel(){
+  var ok=REM.filter(function(x){ return x.resumo && !x.feito; });
+  var tot=0; ok.forEach(function(x){ Object.values(x.resumo.vetores||{}).forEach(function(n){ tot+=n; }); });
+  var html='<table class="up-tab" style="margin-top:0"><thead><tr><th>Documento</th><th>Páginas</th><th>Blocos</th><th>Imagens</th><th>Pontos no Qdrant</th><th></th></tr></thead><tbody>'+
+    REM.map(function(x,k){
+      var r=x.resumo||{};
+      return '<tr><td><div style="font-weight:600">'+esc(String(x.titulo).slice(0,80))+'</div><div style="color:var(--cinza);font-size:11.5px">'+esc(x.arquivo)+'</div></td>'+
+        (x.erro&&!x.resumo ? '<td colspan="4" style="color:#b42318">'+esc(x.erro)+'</td>' :
+          '<td>'+(r.paginas||0)+'</td><td>'+(r.blocos||0)+'</td><td>'+(r.imagens||0)+'</td><td>'+_remVetores(r.vetores)+'</td>')+
+        '<td id="rem-s-'+k+'" style="white-space:nowrap">'+(x.feito?'<span class="up-st gravado">removido</span>':(x.erro&&x.resumo?'<span class="up-st erro">falhou</span><div style="color:#b42318;font-size:11.5px;white-space:normal;max-width:220px">'+esc(x.erro)+'</div>':''))+'</td></tr>';
+    }).join("")+'</tbody></table>';
+  if(ok.length){
+    html+='<label style="display:flex;align-items:center;gap:7px;margin-top:14px;font-size:12.5px;cursor:pointer">'+
+      '<input type="checkbox" id="rem-vet" checked> Apagar também os '+tot.toLocaleString("pt-BR")+' pontos no Qdrant '+
+      '<span style="color:var(--cinza)">(sem isso, a busca continua achando o texto desses documentos)</span></label>'+
+      '<div style="margin-top:12px;padding:10px 12px;background:#fdecec;border:1px solid #f5c2c2;border-radius:8px;font-size:12.5px;color:#7a1d14;line-height:1.6">'+
+      '<b>Não tem volta.</b> Some o PDF, as páginas, os blocos, as correções feitas à mão e os metadados. '+
+      'Se a curadoria ainda aprovar o documento, ele volta a aparecer como novo no <b>Buscar novos</b>.</div>'+
+      '<div class="up-acoes"><button class="up-btn perigo" id="rem-ir" onclick="remConfirmar()">Remover '+ok.length+' documento(s) definitivamente</button>'+
+      '<button class="up-btn sec" onclick="fecharPainel()">Cancelar</button></div>';
+  }
+  abrirPainel("Remover "+REM.length+" documento(s)", html);
+}
+async function remConfirmar(){
+  var vet=el("rem-vet")?el("rem-vet").checked:true;
+  var b=el("rem-ir"); if(b){ b.disabled=true; b.textContent="Removendo…"; }
+  for(var k=0;k<REM.length;k++){
+    var x=REM[k]; if(!x.resumo || x.feito) continue;
+    var c=el("rem-s-"+k); if(c) c.innerHTML='<span class="spin-sm" style="display:inline-block;vertical-align:middle"></span> removendo…';
+    try{
+      var r=await apiFetch(API+"/document/"+x.id+"?vetores="+(vet?"true":"false"),{method:"DELETE"});
+      var j=await r.json(); if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
+      x.feito=true; x.erro=null;
+    }catch(e){ x.erro=e.message; }
+  }
+  selecionados.clear();
+  await carregarDocumentos(); renderHome();
+  remPainel();
 }
 
 
@@ -2205,10 +2302,11 @@ function aplicarHero(){
 }
 function resumoHero(){
   var r=el("hero-resumo"); if(!r) return;
-  var noBanco=IDX.length;
+  var noBanco=IDX.filter(function(d){ return !d.fora; }).length, nFora=IDX.length-noBanco;
   r.innerHTML =
     (TOTAL_CURADORIA ? '<span><b>'+noBanco+'</b> de '+TOTAL_CURADORIA+' baixados</span>' :
                        '<span><b>'+noBanco+'</b> documentos</span>')+
+    (nFora ? '<span><b>'+nFora+'</b> rejeitado'+(nFora>1?'s':'')+' na curadoria</span>' : '')+
     '<span><b>'+extraidos.size+'</b> extraídos</span>'+
     '<span><b>'+vetorizados.size+'</b> vetorizados</span>';
 }

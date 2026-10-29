@@ -87,6 +87,14 @@ def aprovado(a: dict) -> bool:
     return texto(a.get("status")).lower().startswith("aprovad")
 
 
+def fora_do_fluxo(curation_status: str | None) -> bool:
+    """Documento do banco que a curadoria deixou de aprovar: não vai para lote
+    de extração nem para pacote de vetorização. Sem status (entrou antes da
+    curadoria existir) continua valendo."""
+    st = (curation_status or "").strip().lower()
+    return bool(st) and not st.startswith("aprovad")
+
+
 def _titulo(a: dict) -> str:
     return re.sub(r"\W+", " ", texto(a.get("title")).lower()).strip()
 
@@ -165,6 +173,24 @@ def sincronizar(sb, gravar: bool = True) -> dict:
 
     novos = [item(u, a) for u, a in sorted(unicos.items()) if slug_de(u) not in no_banco]
     conhecidos = [(u, a) for u, a in unicos.items() if slug_de(u) in no_banco]
+
+    # documentos do banco que a curadoria não aprova mais (rejeitados ou de volta
+    # a pendente depois de entrarem): vale o registro mais recente com o nome
+    aprovados_slug = {slug_de(u) for u in list(unicos) + list(conflitos)}
+    ultimo: dict[str, dict] = {}
+    for a in artigos:
+        u = texto(a.get("documentUrl"))
+        if u and texto(a.get("updatedAt")) >= texto((ultimo.get(slug_de(u)) or {}).get("updatedAt")):
+            ultimo[slug_de(u)] = a
+    vistos, fora_da_curadoria = set(), []
+    for s, p in no_banco.items():
+        if p["id"] in vistos or s in aprovados_slug or s not in ultimo:
+            continue
+        vistos.add(p["id"])
+        a = ultimo[s]
+        fora_da_curadoria.append({"pdf_id": p["id"], "arquivo": p["pdf_file"],
+                                  "titulo": texto(a.get("title")), "status": texto(a.get("status")),
+                                  "id": texto(a.get("_id"))})
     lista_conflitos = [{"arquivo": u, "no_banco": slug_de(u) in no_banco,
                         "artigos": [item(u, a) for a in regs]}
                        for u, regs in sorted(conflitos.items())]
@@ -178,6 +204,7 @@ def sincronizar(sb, gravar: bool = True) -> dict:
         "novos": len(novos),
         "novos_itens": novos,
         "conflitos": lista_conflitos,
+        "fora_da_curadoria": fora_da_curadoria,
         "atualizados": 0,
         "quando": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
@@ -199,6 +226,11 @@ def sincronizar(sb, gravar: bool = True) -> dict:
         except Exception:
             pass          # colunas de curadoria ausentes (migração 006)
         resumo["atualizados"] += 1
+    for f in fora_da_curadoria:
+        try:
+            sb.table("pdfs").update({"curation_status": f["status"]}).eq("id", f["pdf_id"]).execute()
+        except Exception:
+            pass
     return resumo
 
 

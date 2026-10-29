@@ -148,7 +148,8 @@ def listar_documentos(pedido: Request):
     """Catálogo para a Home: um item por PDF, com metadados e status do pipeline."""
     auth.exigir_usuario(pedido, sb)
     BASE = ("id,pdf_file,total_pages,approved,extracted,vectorized,"
-            "approved_at,extracted_at,vectorized_at,extraction_time_ms,pipeline,created_at")
+            "approved_at,extracted_at,vectorized_at,extraction_time_ms,pipeline,created_at,"
+            "curation_status")
     try:
         pdfs = (sb.table("pdfs").select(BASE + ",extraction_requested_at")
                 .order("created_at", desc=True).execute().data)
@@ -440,6 +441,40 @@ def salvar_edicao(pdf_id: str, edicao: Edicao, pedido: Request):
                "markdown": edicao.markdown is not None},
               pedido.client.host if pedido.client else None)
     return obter_edicao(pdf_id, pedido)
+
+
+@app.get("/api/document/{pdf_id}/remocao", tags=["documentos"])
+def resumo_remocao(pdf_id: str, pedido: Request):
+    """O que some se o documento for removido: páginas, blocos, imagens e vetores."""
+    auth.exigir_cargo(pedido, sb, "admin")
+    from api import remocao
+    try:
+        r = remocao.resumo(sb, pdf_id)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    except RuntimeError as e:
+        raise HTTPException(502, f"não deu para conferir o Qdrant: {e}")
+    return {k: v for k, v in r.items() if not k.startswith("_")}
+
+
+@app.delete("/api/document/{pdf_id}", tags=["documentos"])
+def remover_documento(pdf_id: str, pedido: Request, vetores: bool = True):
+    """Tira o documento do acervo, com páginas, imagens e (com vetores=true) os
+    pontos dele em todas as coleções. Só admin, e não tem volta."""
+    quem = auth.exigir_cargo(pedido, sb, "admin")
+    limitar(pedido, "edicao", "remover-documento")
+    from api import remocao
+    try:
+        r = remocao.remover(sb, pdf_id, vetores)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    except RuntimeError as e:
+        raise HTTPException(502, str(e))
+    registrar("pdf_removido", quem["email"], pdf_id,
+              {k: r[k] for k in ("arquivo", "titulo", "paginas", "blocos", "imagens",
+                                 "vetores", "vetores_apagados")},
+              pedido.client.host if pedido.client else None)
+    return r
 
 
 @app.delete("/api/document/{pdf_id}/edicao", tags=["edição"])

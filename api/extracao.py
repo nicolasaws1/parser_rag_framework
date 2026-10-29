@@ -105,11 +105,13 @@ def escolher_lote(sb, quantos: int, menores: bool = True,
     """Documentos ainda não extraídos. Os pedidos pelo botão Analisar vêm antes."""
     try:
         cand = (sb.table("pdfs")
-                .select("id,pdf_file,total_pages,extraction_requested_at")
+                .select("id,pdf_file,total_pages,extraction_requested_at,curation_status")
                 .eq("extracted", False).execute().data)
     except Exception:
         cand = (sb.table("pdfs").select("id,pdf_file,total_pages")
                 .eq("extracted", False).execute().data)
+    from api.curadoria import fora_do_fluxo
+    cand = [c for c in cand if not fora_do_fluxo(c.get("curation_status"))]
     if ids:
         quer = set(ids)
         cand = [c for c in cand if c["id"] in quer]
