@@ -79,6 +79,9 @@ def main() -> None:
     shutil.copy(trab / "lote.json", export / "lote.json")
 
     feitos = {e["slug"] for e in json.loads((export / "index.json").read_text(encoding="utf-8"))}
+    if not feitos:
+        sys.exit("\nnenhum documento extraído (o erro de cada um está acima e em "
+                 f"{export / 'erros.json'}); nada a enviar ao site")
     faltam = [d["arquivo"] for d in docs if d["slug"] not in feitos]
 
     saida = pasta_base() / f"extracao_{lote}"

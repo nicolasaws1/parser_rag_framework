@@ -613,6 +613,8 @@ if erros:
     for e in erros: print("    -", e['arquivo'])
 
 # ───── cell 8 ─────
+if not INDEX:
+    sys.exit(1)  # nada extraído: os erros já foram listados acima
 slug=INDEX[0]['slug']
 lay=json.loads((EXPORT_DIR/slug/'layout.json').read_text(encoding='utf-8'))
 print("Rota por página:", {p['n']:p['rota'] for p in lay['paginas']})

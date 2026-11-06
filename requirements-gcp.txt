@@ -19,6 +19,9 @@ PyMuPDF
 beautifulsoup4
 Pillow
 huggingface_hub[hf_xet]   # hf_xet: os repositórios dos modelos baixam mais rápido com ele
+# o apply_chat_template do transformers pede jinja2 >= 3.1.6; o venv enxerga o
+# jinja2 3.1.2 do Ubuntu (--system-site-packages) e o pip não atualiza sozinho
+jinja2>=3.1.6
 
 # vetorização
 sentence-transformers>=3.0,<7
