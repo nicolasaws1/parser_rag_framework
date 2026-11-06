@@ -673,6 +673,8 @@
           <button class="up-btn" id="btn-lote" onclick="baixarLote()" style="margin-top:8px" disabled>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <span id="btn-lote-txt">Baixar lote</span></button>
+          <button class="up-btn sec" id="btn-cmd-vm" onclick="copiarComandoVM()" style="margin-top:6px" disabled
+                  title="Para a máquina com GPU: o sb100-extrair baixa estes mesmos documentos">Copiar comando para a VM</button>
           <div id="lote-info" style="font-size:11.5px;color:var(--cinza);margin-top:6px"></div></div>
         <div class="up-passo"><b>2. BAIXE O NOTEBOOK</b>
           Abra no Colab (com <b style="display:inline;color:inherit">GPU</b>) ou no Jupyter do servidor.
@@ -2154,6 +2156,18 @@ function extSelInfo(){
     (n>EXT_MAX ? ' <span style="color:#b42318">máximo de '+EXT_MAX+' por lote</span>' : '');
   var b=el("btn-lote"); if(b) b.disabled = !n || n>EXT_MAX;
   var t=el("btn-lote-txt"); if(t) t.textContent = n ? "Baixar lote ("+n+")" : "Baixar lote";
+  var c=el("btn-cmd-vm"); if(c) c.disabled = !n || n>EXT_MAX;
+}
+/* a seleção fica só no navegador; a VM recebe os ids no próprio comando */
+async function copiarComandoVM(){
+  var ids=extSelecionados().map(function(d){ return d.id; });
+  if(!ids.length || ids.length>EXT_MAX) return;
+  var cmd="sb100-extrair --ids "+ids.join(",");
+  var ok=false;
+  try{ await navigator.clipboard.writeText(cmd); ok=true; }catch(_){}
+  el("lote-info").innerHTML = ok
+    ? "Comando copiado com "+ids.length+" documento(s). Cole no terminal da VM."
+    : 'Copie e cole no terminal da VM:<textarea readonly style="width:100%;margin-top:4px;font-size:11px" rows="3" onclick="this.select()">'+esc(cmd)+'</textarea>';
 }
 
 /* ── curadoria (Squad 1) ──

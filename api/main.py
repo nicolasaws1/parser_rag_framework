@@ -689,7 +689,7 @@ def _receber_pacote(arquivo: UploadFile) -> bytes:
 
 @app.get("/api/extracao/lote", tags=["extração"])
 def extracao_lote(pedido: Request, quantos: int = 5, menores: bool = True,
-                  ids: str | None = None):
+                  ids: str | None = None, solicitados: bool = False):
     """Zip com os PDFs ainda não extraídos e os metadados, para levar à GPU.
 
     O computador que extrai não recebe chave nenhuma do banco: baixa isto, roda
@@ -700,9 +700,10 @@ def extracao_lote(pedido: Request, quantos: int = 5, menores: bool = True,
     from fastapi.responses import Response
     from api import extracao
     lista = [x for x in (ids or "").split(",") if x.strip()] or None
-    docs = extracao.escolher_lote(sb, quantos, menores, lista)
+    docs = extracao.escolher_lote(sb, quantos, menores, lista, solicitados)
     if not docs:
-        raise HTTPException(404, "não há documento pendente de extração")
+        raise HTTPException(404, "nenhum pedido de extração em aberto" if solicitados and not lista
+                            else "não há documento pendente de extração")
     dados, resumo = extracao.montar_lote(sb, docs, quem["email"])
     registrar("extracao_solicitada", quem["email"], None,
               {"lote": resumo["lote"], "documentos": resumo["documentos"],

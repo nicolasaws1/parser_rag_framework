@@ -101,8 +101,9 @@ _META = {"title": "Título", "authors": "Autor(es)", "year": "Ano",
 
 
 def escolher_lote(sb, quantos: int, menores: bool = True,
-                  ids: list[str] | None = None) -> list[dict]:
-    """Documentos ainda não extraídos. Os pedidos pelo botão Analisar vêm antes."""
+                  ids: list[str] | None = None, so_solicitados: bool = False) -> list[dict]:
+    """Documentos ainda não extraídos. Os pedidos em "Solicitar extração" vêm
+    antes; com `ids`, só esses; com `so_solicitados`, só os pedidos."""
     try:
         cand = (sb.table("pdfs")
                 .select("id,pdf_file,total_pages,extraction_requested_at,curation_status")
@@ -115,8 +116,12 @@ def escolher_lote(sb, quantos: int, menores: bool = True,
     if ids:
         quer = set(ids)
         cand = [c for c in cand if c["id"] in quer]
+    if so_solicitados:
+        cand = [c for c in cand if c.get("extraction_requested_at")]
+    # sem páginas conhecidas vai para o fim nos dois sentidos
     cand.sort(key=lambda d: (not d.get("extraction_requested_at"),
-                             (d.get("total_pages") or 10**6) if menores else 0))
+                             (d.get("total_pages") or 10**6) if menores
+                             else -(d.get("total_pages") or -1)))
     return cand[: max(1, min(quantos, MAX_LOTE))]
 
 

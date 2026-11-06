@@ -205,6 +205,14 @@ Pede o login do site e a chave do Qdrant. Na aba Vetorização, a coleção
 ```bash
 sb100-extrair --quantos 10
 ```
+Sem mais nada, o site escolhe: primeiro os pedidos em **Solicitar extração**
+na Home, depois os menores. Para escolher os documentos:
+
+| comando | pega |
+|---|---|
+| `sb100-extrair --ids <id>,<id>,...` | exatamente esses. Na aba **Extração** do site, marque os documentos e clique em **Copiar comando para a VM**: o comando vem pronto |
+| `sb100-extrair --solicitados --quantos 10` | só os pedidos em **Solicitar extração** na Home |
+| `sb100-extrair --maiores --quantos 10` | os maiores primeiro |
 Para comparar a velocidade, `LOTE_PAGINAS=4 sb100-extrair --quantos 10` manda 4
 páginas por vez ao Chandra; no fim de cada documento sai uma linha com o uso da GPU.
 

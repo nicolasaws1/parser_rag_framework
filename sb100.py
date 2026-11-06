@@ -3,6 +3,7 @@ Extração e vetorização pela linha de comando, num servidor com GPU que só t
 terminal. Faz o mesmo que as abas Extração e Vetorização do site, de ponta a ponta:
 
     python sb100.py extrair --quantos 10
+    python sb100.py extrair --ids <id>,<id>     (os marcados na aba Extração)
     python sb100.py vetorizar --colecao sb100 --quantos 50
 
 extrair     baixa um lote de PDFs ainda não extraídos (com os metadados), roda o
@@ -108,8 +109,12 @@ def _resumo(rel: dict, chave: str = "arquivo") -> None:
 
 
 def extrair(site: Site, a, pasta: Path) -> None:
-    lote = site.baixar("GET", "/api/extracao/lote", pasta,
-                       params={"quantos": a.quantos, "menores": str(not a.maiores).lower()})
+    ids = [x.strip() for x in (a.ids or "").split(",") if x.strip()]
+    params = {"quantos": len(ids) if ids else a.quantos, "menores": str(not a.maiores).lower(),
+              "solicitados": str(a.solicitados).lower()}
+    if ids:
+        params["ids"] = ",".join(ids)
+    lote = site.baixar("GET", "/api/extracao/lote", pasta, params=params)
     print(f"lote baixado: {lote}\n")
     _rodar("extractor/rodar_lote.py", lote, *(["--hibrido"] if a.hibrido else []))
     resultado = pasta / lote.name.replace("lote_", "extracao_", 1)
@@ -167,6 +172,10 @@ def main() -> None:
 
     e = sub.add_parser("extrair", help="lote -> extrator -> site")
     e.add_argument("--quantos", type=int, default=5, help="documentos no lote (até 50)")
+    e.add_argument("--ids", help="só estes documentos, separados por vírgula (o botão "
+                                 "'Copiar comando para a VM' da aba Extração monta a lista)")
+    e.add_argument("--solicitados", action="store_true",
+                   help="só os pedidos em 'Solicitar extração' na Home")
     e.add_argument("--maiores", action="store_true", help="começa pelos maiores, não pelos menores")
     e.add_argument("--hibrido", action="store_true", help="Docling nas páginas de texto")
     e.add_argument("--substituir", action="store_true", help="regrava documento já extraído")
