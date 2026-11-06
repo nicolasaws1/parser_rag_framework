@@ -26,6 +26,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import requests
@@ -108,6 +109,50 @@ def _resumo(rel: dict, chave: str = "arquivo") -> None:
               f": {g.get('motivo', '')}")
 
 
+def gravar_extracao(site: Site, arquivo: Path, substituir: bool) -> dict:
+    """Envia o resultado e espera o site gravar.
+
+    Gravar 10 documentos leva minutos (cada página vira imagem no bucket), e o
+    Cloudflare corta em 100 s um pedido sem resposta: o terminal dava erro 524
+    mesmo com o site gravando tudo. Com acompanhar=true o site responde na hora
+    com o id de uma tarefa e grava em segundo plano; aqui só se pergunta como vai.
+    """
+    r = site.enviar("/api/extracao/upload", arquivo,
+                    substituir=str(substituir).lower(), acompanhar="true")
+    if "tarefa" not in r:
+        return r              # site anterior a este modo: o relatório já veio
+    tid, visto, falhas = r["tarefa"], None, 0
+    while True:
+        time.sleep(3)
+        try:
+            resp = site.pedir("GET", f"/api/extracao/tarefa/{tid}", timeout=60)
+        except requests.RequestException as e:
+            resp = None
+            erro = str(e)
+        if resp is not None and resp.status_code == 200:
+            falhas = 0
+            t = resp.json()
+            if t["estado"] == "concluído":
+                return t["resultado"]
+            if t["estado"] == "falhou":
+                sys.exit(f"o site não conseguiu gravar: {t.get('erro')}. "
+                         "Mandar o mesmo zip de novo é seguro: o que já entrou é pulado.")
+            if t.get("documentos"):
+                linha = (f"  gravando {t['documento']} de {t['documentos']}: "
+                         f"{str(t.get('arquivo'))[:48]} ({t.get('etapa')})")
+                if linha != visto:
+                    print(linha)
+                    visto = linha
+            continue
+        if resp is not None and resp.status_code == 404:
+            sys.exit("o site perdeu a tarefa (reiniciou?). Confira na Home o que entrou e mande "
+                     f"o mesmo zip de novo, que o que já foi gravado é pulado:\n   {arquivo}")
+        falhas += 1
+        if falhas >= 20:
+            sys.exit(f"sem resposta do site há um minuto ({_detalhe(resp) if resp is not None else erro}). "
+                     f"O zip continua em {arquivo}; mandar de novo é seguro.")
+
+
 def extrair(site: Site, a, pasta: Path) -> None:
     ids = [x.strip() for x in (a.ids or "").split(",") if x.strip()]
     params = {"quantos": len(ids) if ids else a.quantos, "menores": str(not a.maiores).lower(),
@@ -121,7 +166,7 @@ def extrair(site: Site, a, pasta: Path) -> None:
     if not resultado.exists():
         sys.exit(f"não achei {resultado}")
     print(f"\nenviando {resultado.name} ao site…")
-    rel = site.enviar("/api/extracao/upload", resultado, substituir=str(a.substituir).lower())
+    rel = gravar_extracao(site, resultado, a.substituir)
     print(f"{len(rel['gravados'])} gravado(s), {len(rel['pulados'])} pulado(s), "
           f"{len(rel['falhas'])} com problema")
     _resumo(rel, "slug")
