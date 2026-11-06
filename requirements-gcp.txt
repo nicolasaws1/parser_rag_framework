@@ -1,0 +1,28 @@
+# Máquina com GPU que roda a extração e a vetorização pela linha de comando
+# (sb100.py), como a VM de teste do GCP. Não serve para a API do site.
+#
+#   pip install -r requirements-gcp.txt
+#   python baixar_modelos.py
+#
+# Só o extrator Chandra: o híbrido (--hibrido) precisa também do docling, que
+# fica de fora daqui. As versões fixadas são as que rodaram no Colab em outubro
+# de 2026; chandra-ocr 0.2.0 exige torch >= 2.8 e transformers >= 5.2, então
+# um PyTorch mais antigo já instalado na máquina é atualizado.
+#
+# Pacote do sistema: o opencv (puxado pelo doclayout-yolo) precisa de
+#   sudo apt-get install -y libgl1 libglib2.0-0
+
+# extração
+chandra-ocr[hf]==0.2.0
+doclayout-yolo==0.0.4
+PyMuPDF
+beautifulsoup4
+Pillow
+huggingface_hub[hf_xet]   # hf_xet: os repositórios dos modelos baixam mais rápido com ele
+
+# vetorização
+sentence-transformers>=3.0,<7
+numpy
+
+# sb100.py conversa com o site por HTTP
+requests
