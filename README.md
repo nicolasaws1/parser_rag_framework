@@ -194,7 +194,9 @@ python sb100.py --site https://endereco-do-site vetorizar --colecao sb100 --quan
 resultado; os documentos aparecem na Home como extraídos. `vetorizar` pega os
 extraídos que faltam na coleção, grava os vetores direto no Qdrant e confirma no
 site. Sem acesso ao Qdrant na máquina, `--via-site` manda o zip para o site gravar.
-Opções: `python sb100.py extrair -h` e `python sb100.py vetorizar -h`.
+Opções: `python sb100.py extrair -h` e `python sb100.py vetorizar -h`. Se o envio de
+uma extração falhar, `python sb100.py reenviar <extracao_….zip>` manda de novo. Numa
+VM do GCP, o [guia](docs/guia-vm-gcp.md) instala tudo com um script.
 
 ## API
 
@@ -242,6 +244,8 @@ No Supabase, `document.md` vai para `pdfs.markdown`, cada bloco vira uma linha d
 - [`docs/pesquisa-visao-graficos.md`](docs/pesquisa-visao-graficos.md): levantamento sobre a qualidade de modelos de visão na leitura de gráficos científicos.
 - [`docs/deploy.md`](docs/deploy.md): subir o site em HTTPS no servidor.
 - [`docs/colab-extracao.md`](docs/colab-extracao.md): extrair um lote no Colab.
+- [`docs/guia-vm-gcp.md`](docs/guia-vm-gcp.md): extrair e vetorizar numa VM com GPU do GCP, do zero.
+- [`docs/infra-gcp.md`](docs/infra-gcp.md): o que a VM do GCP precisa (GPU, disco, imagem, rede) e a subida automática.
 - [`docs/servidor-local.md`](docs/servidor-local.md): migrar o Supabase para servidor local.
 
 ## Status e próximos passos

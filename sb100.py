@@ -5,11 +5,14 @@ terminal. Faz o mesmo que as abas Extração e Vetorização do site, de ponta a
     python sb100.py extrair --quantos 10
     python sb100.py extrair --ids <id>,<id>     (os marcados na aba Extração)
     python sb100.py vetorizar --colecao sb100 --quantos 50
+    python sb100.py reenviar trabalho/extracao_<lote>.zip
 
 extrair     baixa um lote de PDFs ainda não extraídos (com os metadados), roda o
             extrator e envia o resultado de volta ao site
 vetorizar   pega os documentos extraídos que ainda não estão na coleção, fatia,
             calcula os embeddings, grava direto no Qdrant e confirma no site
+reenviar    manda de novo um resultado de extração que não chegou a gravar
+            (o que já está no site é pulado)
 
 O endereço do site vem de --site ou de SB100_SITE. O e-mail, a senha e a chave
 do Qdrant são perguntados na hora (sem aparecer na tela), ou lidos de
@@ -109,6 +112,11 @@ def _resumo(rel: dict, chave: str = "arquivo") -> None:
               f": {g.get('motivo', '')}")
 
 
+_REENVIAR = ("Mandar de novo é seguro (o que já entrou é pulado):\n"
+             "   python sb100.py reenviar {0}\n"
+             "   (na VM do GCP: sb100-reenviar {0})")
+
+
 def gravar_extracao(site: Site, arquivo: Path, substituir: bool) -> dict:
     """Envia o resultado e espera o site gravar.
 
@@ -135,8 +143,7 @@ def gravar_extracao(site: Site, arquivo: Path, substituir: bool) -> dict:
             if t["estado"] == "concluído":
                 return t["resultado"]
             if t["estado"] == "falhou":
-                sys.exit(f"o site não conseguiu gravar: {t.get('erro')}. "
-                         "Mandar o mesmo zip de novo é seguro: o que já entrou é pulado.")
+                sys.exit(f"o site não conseguiu gravar: {t.get('erro')}\n{_REENVIAR.format(arquivo)}")
             if t.get("documentos"):
                 linha = (f"  gravando {t['documento']} de {t['documentos']}: "
                          f"{str(t.get('arquivo'))[:48]} ({t.get('etapa')})")
@@ -145,12 +152,22 @@ def gravar_extracao(site: Site, arquivo: Path, substituir: bool) -> dict:
                     visto = linha
             continue
         if resp is not None and resp.status_code == 404:
-            sys.exit("o site perdeu a tarefa (reiniciou?). Confira na Home o que entrou e mande "
-                     f"o mesmo zip de novo, que o que já foi gravado é pulado:\n   {arquivo}")
+            sys.exit(f"o site perdeu a tarefa (reiniciou?).\n{_REENVIAR.format(arquivo)}")
         falhas += 1
         if falhas >= 20:
-            sys.exit(f"sem resposta do site há um minuto ({_detalhe(resp) if resp is not None else erro}). "
-                     f"O zip continua em {arquivo}; mandar de novo é seguro.")
+            sys.exit(f"sem resposta do site há um minuto ({_detalhe(resp) if resp is not None else erro})."
+                     f"\n{_REENVIAR.format(arquivo)}")
+
+
+def reenviar(site: Site, a, pasta: Path) -> None:
+    arquivo = Path(a.arquivo).resolve()
+    if not arquivo.is_file():
+        sys.exit(f"não achei {arquivo}")
+    print(f"enviando {arquivo.name} ao site…")
+    rel = gravar_extracao(site, arquivo, a.substituir)
+    print(f"{len(rel['gravados'])} gravado(s), {len(rel['pulados'])} pulado(s), "
+          f"{len(rel['falhas'])} com problema")
+    _resumo(rel, "slug")
 
 
 def extrair(site: Site, a, pasta: Path) -> None:
@@ -231,6 +248,9 @@ def main() -> None:
     v.add_argument("--lote", type=int, default=32, help="trechos por chamada ao modelo")
     v.add_argument("--via-site", action="store_true",
                    help="sem acesso ao Qdrant daqui: manda o zip para o site gravar")
+    r = sub.add_parser("reenviar", help="manda de novo um extracao_….zip que não gravou")
+    r.add_argument("arquivo", help="o extracao_….zip (fica na pasta de trabalho)")
+    r.add_argument("--substituir", action="store_true", help="regrava documento já extraído")
     a = p.parse_args()
 
     if not a.site:
@@ -239,7 +259,7 @@ def main() -> None:
     pasta.mkdir(parents=True, exist_ok=True)
     os.environ["SB100_DIR"] = str(pasta)     # os dois scripts trabalham na mesma pasta
     site = Site(a.site)
-    (extrair if a.passo == "extrair" else vetorizar)(site, a, pasta)
+    {"extrair": extrair, "vetorizar": vetorizar, "reenviar": reenviar}[a.passo](site, a, pasta)
 
 
 if __name__ == "__main__":

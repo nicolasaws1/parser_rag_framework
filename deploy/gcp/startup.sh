@@ -63,7 +63,7 @@ export HF_HOME=$RAIZ/hf
 
 # comandos para quem entra por SSH: executáveis (e não alias), para valer
 # dentro do tmux e com variável na frente, como LOTE_PAGINAS=4 sb100-extrair
-for passo in extrair vetorizar; do
+for passo in extrair vetorizar reenviar; do
     {
         echo '#!/bin/bash'
         echo "export HF_HOME=\${HF_HOME:-$RAIZ/hf}"

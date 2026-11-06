@@ -3,6 +3,9 @@
 Para quem cria a instância. A VM é descartável: sobe, roda o teste, é destruída.
 Nada que precise sobreviver fica nela; o resultado vai para o site e para o Qdrant.
 
+Para quem vai usar a máquina, o passo a passo do zero (entrar, instalar, extrair e
+vetorizar) está em [guia-vm-gcp.md](guia-vm-gcp.md).
+
 ## O que roda na VM
 
 Só a parte de GPU do projeto, pela linha de comando ([sb100.py](../sb100.py)):
