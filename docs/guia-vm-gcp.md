@@ -134,6 +134,14 @@ Ele calcula os vetores, grava direto no Qdrant e confirma no site. Confira na ab
 **Vetorização**, com a coleção `teste_gcp` escolhida: deve mostrar 2 PDFs
 vetorizados.
 
+O `--quantos` pega os primeiros da lista dos que faltam na coleção, não os
+recém-extraídos. Para vetorizar documentos específicos, use os mesmos ids da
+extração:
+
+```bash
+sb100-vetorizar --colecao teste_gcp --ids <id>,<id>,...
+```
+
 ## 9. Lotes maiores
 
 Se os passos 7 e 8 deram certo, siga em lotes de até 10 PDFs. Cada lote vai para

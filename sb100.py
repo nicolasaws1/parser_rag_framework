@@ -193,11 +193,22 @@ def vetorizar(site: Site, a, pasta: Path) -> None:
     r = site.pedir("GET", "/api/vetorizacao/documentos", params={"colecao": a.colecao})
     if r.status_code != 200:
         sys.exit(f"documentos: {_detalhe(r)}")
-    faltam = [d["pdf_id"] for d in r.json() if not d["vetorizado"]]
-    if not faltam:
+    docs = {d["pdf_id"]: d for d in r.json()}
+    faltam = [i for i, d in docs.items() if not d["vetorizado"]]
+    pedidos = [x.strip() for x in (a.ids or "").split(",") if x.strip()]
+    if pedidos:
+        for i in pedidos:
+            if i not in docs:
+                print(f"  ignorado  {i}: não está extraído (ou o id está errado)")
+            elif docs[i]["vetorizado"]:
+                print(f"  ignorado  {i}: já está em {a.colecao}")
+        faltam = [i for i in pedidos if i in docs and not docs[i]["vetorizado"]]
+        if not faltam:
+            sys.exit("nenhum dos documentos pedidos falta nesta coleção")
+    elif not faltam:
         print(f"todos os documentos extraídos já estão em {a.colecao}")
         return
-    ids = faltam[:a.quantos]
+    ids = faltam if pedidos else faltam[:a.quantos]
     print(f"{len(faltam)} documento(s) fora de {a.colecao}; vetorizando {len(ids)}")
     pacote = site.baixar("POST", "/api/vetorizacao/pacote", pasta,
                          json={"colecao": a.colecao, "ids": ids})
@@ -245,6 +256,7 @@ def main() -> None:
     v = sub.add_parser("vetorizar", help="pacote -> embeddings -> Qdrant -> confirmar")
     v.add_argument("--colecao", required=True, help="coleção do Qdrant (ex.: sb100)")
     v.add_argument("--quantos", type=int, default=50, help="documentos no pacote (até 200)")
+    v.add_argument("--ids", help="só estes documentos, separados por vírgula (os mesmos ids do sb100-extrair)")
     v.add_argument("--lote", type=int, default=32, help="trechos por chamada ao modelo")
     v.add_argument("--via-site", action="store_true",
                    help="sem acesso ao Qdrant daqui: manda o zip para o site gravar")
