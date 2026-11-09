@@ -28,6 +28,8 @@ from typing import Any
 
 import fitz
 
+from api import legendas
+
 PIPELINE = "hibrido: DocLayout-YOLO + Chandra OCR 2 + Docling + PyMuPDF"
 
 # o único formato aceito no upload: é o que a célula final do notebook produz
@@ -276,6 +278,8 @@ def ingerir_um(sb, pasta: Path, slug: str, pdf_id: str, avisar=_nada) -> dict:
     for i in range(0, len(imgs), 500):
         sb.table("page_images").insert(imgs[i:i + 500]).execute()
 
+    for pg in paginas:
+        legendas.aplicar_na_pagina(pg.get("blocos") or [])
     blocos = [{"pdf_id": pdf_id, "page_number": pg["n"], "block_type": b.get("tipo"),
                "markdown_text": limpar(b.get("md")), "bbox": b.get("bbox"),
                "layout": limpar(b)}

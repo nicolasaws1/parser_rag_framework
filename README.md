@@ -88,6 +88,7 @@ api/                         API FastAPI (servidor sem GPU)
   auth.py                    autenticação via Supabase Auth (cargos admin, curador, leitor)
   curadoria.py               ponte com a API de curadoria da Squad 01
   extracao.py                lote para a GPU e conferência/gravação do zip de extração devolvido
+  legendas.py                liga cada figura à legenda do autor, pela posição na página
   chunker.py                 fatiamento (1024 caracteres, 20% de sobreposição, tabela e figura inteiras)
   vetorizacao.py             coleções do Qdrant, pacote para a GPU, conferência/gravação dos vetores
 front/
@@ -112,6 +113,7 @@ scripts/                     operação do acervo e do banco
   sync_metadados.py          sincroniza metadados da curadoria com o Supabase
   ingerir_extracao.py        envia uma extração ao Supabase, atualizando o documento
   gerar_figuras.py           gera os recortes de figura e os liga ao bloco
+  associar_legendas.py       liga as figuras já extraídas à legenda do autor, pela posição na página
   reclassificar_figuras.py   corrige figuras marcadas como gráfico que são fotografia
   limpar_orfaos.py           remove imagens do bucket sem referência
   checar_tudo.py             roda todas as conferências e devolve um veredito
