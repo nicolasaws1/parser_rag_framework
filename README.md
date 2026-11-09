@@ -15,6 +15,7 @@ Converte artigos e boletins agronômicos (texto, tabelas, figuras, gráficos e f
 
 - [Visão geral](#visão-geral)
 - [Arquitetura da extração](#arquitetura-da-extração)
+- [Figuras e gráficos](#figuras-e-gráficos)
 - [Estrutura do repositório](#estrutura-do-repositório)
 - [Como rodar](#como-rodar)
 - [API](#api)
@@ -43,7 +44,10 @@ O fluxo de ponta a ponta tem duas metades, porque a extração precisa de GPU e 
  API FastAPI + front ── inspeção, edição, auditoria e fila             (servidor sem GPU)
           │
           ▼
- Qdrant ── vetorização (próxima etapa)
+ GPU ── rodar_vetorizacao.py com o pacote da aba Vetorização           (vetorização)
+          │
+          ▼
+ Qdrant ── um ponto por trecho: texto, tabela inteira ou figura inteira
 ```
 
 ## Arquitetura da extração
@@ -59,12 +63,12 @@ A extração é feita **por página**, com roteamento híbrido:
                                   + PyMuPDF (rede de segurança: recupera texto que o Docling derruba)
 
  Figuras/gráficos: YOLO decide que é figura → Chandra lê o recorte
-                   (subclasse gráfico/foto + equações em LaTeX)
+                   (descrição + equações em LaTeX; gráfico × foto pelo fundo do recorte)
 
  Saída por documento:  layout.json  +  document.md (LaTeX)  +  pages/  +  figures/
 ```
 
-- **YOLO** decide a classe (tabela × figura); **Chandra** dá a subclasse e o conteúdo; **Docling** garante a ordem de leitura; **PyMuPDF** é a rede de segurança.
+- **YOLO** decide a classe (tabela × figura); **Chandra** dá o conteúdo, e o recorte decide gráfico × foto (detalhes em [Figuras e gráficos](#figuras-e-gráficos)); **Docling** garante a ordem de leitura; **PyMuPDF** é a rede de segurança.
 - O Docling roda com `do_ocr = False`: ele lê a camada de texto do PDF. Todo OCR é feito pelo Chandra.
 - `document.md` usa notação **LaTeX** para ciência (`^{15}N`, `(NH_{4})_{2}SO_{4}`), sem perda e sem ambiguidade para o LLM. Tabelas viram Markdown tables.
 
@@ -79,6 +83,87 @@ Há dois modos de extração, com os mesmos formatos de saída:
 | Risco principal | Docling às vezes derruba parágrafo | alucinação do modelo de visão |
 
 O Boletim 100 foi extraído no modo só Chandra, e essa foi a saída aprovada. A comparação detalhada está em [`extractor/README.md`](extractor/README.md).
+
+## Figuras e gráficos
+
+Cada figura do artigo (gráfico, diagrama, foto, micrografia) vira um trecho próprio no Qdrant, com o caminho do recorte, a legenda do autor e o tipo no payload. Assim a busca acha a informação que só está no gráfico, e a resposta pode mostrar a imagem e voltar ao bloco exato na tela Analisar.
+
+### Do PDF ao Qdrant
+
+```
+ extração (GPU)   DocLayout-YOLO marca a região da figura (bbox)
+        │         Chandra OCR 2 lê o recorte: descrição em inglês, equações em LaTeX
+        │         e, quando há, a tabela de dados
+        │         tipo decidido pelo recorte: menos de 38% de fundo branco é foto, senão gráfico
+        ▼
+ ingestão         api/legendas.py liga a figura à legenda do autor, pela posição na página
+        │         api/extracao.py recorta de novo do PDF do bucket, pela bbox gravada no banco
+        ▼
+ page_blocks      block_type (grafico | foto), layout.caption, layout.fig, markdown_text
+        │         a correção feita à mão na tela Analisar vale por cima da extração
+        ▼
+ vetorização      api/chunker.py: um trecho por figura, inteiro: legenda + descrição
+        │         vetor denso (Qwen3-Embedding-0.6B) e esparso (opensearch neural sparse)
+        ▼
+ Qdrant           ponto com tipo=figura, e o recorte, a legenda e o tipo no payload
+```
+
+O recorte gravado não vem da pasta da extração: vem do PDF guardado no bucket `pdfs`, cortado pela bbox do próprio `page_blocks`. A numeração dos blocos muda entre corridas, e casar por nome de arquivo colaria o recorte de uma figura no bloco de outra.
+
+### O trecho de figura
+
+| Regra | Onde |
+|---|---|
+| A figura entra inteira, num trecho só, por maior que seja. Não entra nas janelas de 1024 caracteres do texto. | `api/chunker.py`, `gerar_chunks` |
+| O texto vetorizado é a legenda do autor seguida da descrição do Chandra. A legenda está no idioma do artigo e a descrição em inglês, e as duas juntas casam com mais perguntas. | `api/chunker.py`, `gerar_chunks` |
+| A legenda vai na frente. O vetor esparso lê só os primeiros 512 tokens, então o que fica de fora dele é o fim da descrição. | `vetorizador/embeddings.py` |
+| Figura com recorte entra mesmo sem legenda e sem descrição. | `api/chunker.py`, `gerar_chunks` |
+| O tipo vem da coluna `block_type`, que é a que `reclassificar_figuras.py` corrige. | `api/vetorizacao.py`, `paginas_do_documento` |
+
+Campos do payload de um ponto de figura, além dos comuns a todo trecho:
+
+| Campo | Conteúdo |
+|---|---|
+| `tipo` | `figura` |
+| `content` | o texto vetorizado: legenda + descrição |
+| `figura` | caminho do recorte no bucket `images`, como `<pasta do documento>/figuras/p6-b12.jpg` |
+| `legenda` | só a legenda do autor, para exibir junto da imagem; `null` quando a figura não tem |
+| `tipo_figura` | `grafico` ou `foto` |
+| `pdf_id`, `pagina_pdf`, `blocos` | documento, página do PDF e id do bloco (`pN-bM`), o mesmo da tela Analisar |
+
+O bucket `images` é privado. Para exibir o recorte, gere uma URL assinada com o caminho de `figura`, como a API já faz com as páginas (`_signed` em `api/main.py`).
+
+### Ingerir figuras novas
+
+Figura nova não tem passo à parte: ela segue o caminho do documento.
+
+1. **Extrair.** Pela aba Extração, por `python sb100.py --site <endereço> extrair` ou pelo Colab. O extrator detecta, descreve e classifica cada figura.
+2. **Gravar a extração.** O upload da aba Extração, o `sb100.py` e o `python scripts/ingerir_extracao.py <pasta>` fazem o mesmo: ligam as legendas e geram os recortes logo depois de gravar os blocos. Se um recorte falhar, o aviso aparece na tela e no terminal, e o documento fica gravado sem os recortes que faltaram.
+3. **Conferir.** `python scripts/gerar_figuras.py` lista as figuras sem recorte; com `--aplicar`, gera e grava. Na tela Analisar, confira o recorte e o texto de cada figura: o texto corrigido ali é o que vai para o Qdrant.
+4. **Vetorizar.** Na aba Vetorização, com o filtro "Não vetorizados nesta coleção", ou por `python sb100.py --site <endereço> vetorizar --colecao <coleção>`. Cada figura vira um ponto.
+
+### Acervo já extraído
+
+Para documentos extraídos antes de uma correção do extrator. Os três scripts só relatam o que mudariam; gravam com `--aplicar`. Rodam da raiz do repositório e leem o `.env`.
+
+| Script | O que faz | Quando usar |
+|---|---|---|
+| `scripts/gerar_figuras.py` | recorta do PDF as figuras sem recorte; `--doc <trecho do nome>` para um documento, `--refazer` para refazer os que já têm | figura sem recorte |
+| `scripts/associar_legendas.py` | liga cada figura à legenda do autor, pela posição na página; `--doc <trecho do nome>` para um documento. Pula as páginas com edição manual | documentos extraídos antes de 09/11/2026 |
+| `scripts/reclassificar_figuras.py` | refaz gráfico ou foto olhando o recorte. Precisa do Pillow (`pip install Pillow`), que não está no `requirements.txt` | documentos classificados pela regra antiga, que olhava só o texto |
+
+Esses scripts mudam o banco, não o Qdrant. Documento que já está numa coleção precisa ser regravado para a busca ver a mudança: na aba Vetorização, use o filtro "Já vetorizados", marque o documento, baixe o pacote, rode o comando abaixo e confirme na aba. Os pontos antigos do documento saem e os novos entram.
+
+```bash
+QDRANT_API_KEY=... python vetorizador/rodar_vetorizacao.py pacote_….zip --enviar --substituir
+```
+
+### Limitações conhecidas
+
+- A regra dos 38% confunde fundo branco com gráfico. Os erros mais comuns são logo, QR code e capa de revista marcados como `grafico`.
+- Figura que o Chandra acha na página sem que o YOLO tenha marcado a região é classificada pelo texto, como na regra antiga.
+- Imagem sem dado (logo, capa de revista, retrato) entra na busca como figura. Não há filtro para ela.
+- O vetor esparso lê só os primeiros 512 tokens do trecho. Em descrição longa, o fim fica de fora dele, mas continua inteiro no payload.
 
 ## Estrutura do repositório
 
@@ -228,7 +313,7 @@ A fila e o heartbeat do worker são protegidos pelo cabeçalho `X-Worker-Token`.
 | `md` | conteúdo do bloco (vai para o `document.md`) |
 | `id` | identificador `pN-bM` |
 | `tabela_html` / `tabela_json` | tabela estruturada (quando `tipo=tabela`) |
-| `caption` / `fig` | legenda em português e recorte salvo (quando `tipo=grafico`/`foto`) |
+| `caption` / `fig` | legenda do autor, no idioma do artigo, e caminho do recorte no bucket `images` (quando `tipo=grafico`/`foto`) |
 
 No Supabase, `document.md` vai para `pdfs.markdown`, cada bloco vira uma linha de `page_blocks` e as imagens de página vão para o bucket `images`.
 
