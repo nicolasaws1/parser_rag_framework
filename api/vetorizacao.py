@@ -313,7 +313,8 @@ def paginas_do_documento(sb, pdf_id: str) -> tuple[list[dict], str]:
     por_pag: dict[int, list] = {}
     for b in bl:
         lay = dict(b.get("layout") or {})
-        lay.setdefault("tipo", b.get("block_type"))
+        # a coluna é o que a reclassificação corrige; o layout guarda o que a extração disse
+        lay["tipo"] = b.get("block_type") or lay.get("tipo")
         lay.setdefault("md", b.get("markdown_text"))
         lay.setdefault("bbox", b.get("bbox"))
         por_pag.setdefault(b["page_number"], []).append(lay)

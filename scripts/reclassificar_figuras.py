@@ -78,7 +78,10 @@ def main() -> None:
         print(f"   {(b['layout'] or {}).get('id'):<10} {b['block_type']:>8} -> {certo:<8} "
               f"({br*100:.0f}% branco)")
         if aplicar:
-            sb.table("page_blocks").update({"block_type": certo}).eq("id", b["id"]).execute()
+            # as duas cópias do tipo: a vetorização e a tela Analisar leem o layout
+            sb.table("page_blocks").update({"block_type": certo,
+                                            "layout": {**(b["layout"] or {}), "tipo": certo}}) \
+                .eq("id", b["id"]).execute()
 
     if aplicar:
         print(f"\n{len(mudam)} corrigidas")
