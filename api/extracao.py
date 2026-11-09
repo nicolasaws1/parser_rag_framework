@@ -309,9 +309,8 @@ def recortar(pagina: fitz.Page, bbox: list[float]) -> bytes:
         min(r.y1, r.y0 + (y1 + MARGEM_FIGURA) * r.height),
     )
     pix = pagina.get_pixmap(matrix=fitz.Matrix(ESCALA_FIGURA, ESCALA_FIGURA), clip=caixa)
-    buf = io.BytesIO()
-    pix.pil_save(buf, format="JPEG", quality=88, optimize=True)
-    return buf.getvalue()
+    # tobytes e não pil_save: pil_save exige o Pillow, que a imagem do site não tem
+    return pix.tobytes("jpeg", jpg_quality=88)
 
 
 def gerar_figuras(sb, pdf_id: str, pdf_file: str, refazer: bool = False,

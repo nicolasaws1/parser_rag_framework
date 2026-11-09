@@ -48,6 +48,8 @@ def main() -> None:
     for g in rel["gravados"]:
         extra = f", {g['figuras']} figuras" if g.get("figuras") else ""
         print(f"  ok      {g['slug'][:50]:<52} {g['paginas']} pág, {g['blocos']} blocos{extra}")
+        if g.get("aviso_figuras"):
+            print(f"          recortes de figura falharam: {g['aviso_figuras']}")
     for p in rel["pulados"]:
         print(f"  pulado  {p['slug'][:50]:<52} {p['motivo']}")
     for f in rel["falhas"]:

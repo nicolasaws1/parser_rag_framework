@@ -1559,7 +1559,7 @@ function _upTabela(itens){
   return '<table class="up-tab"><thead><tr><th>Documento</th><th>Páginas</th><th>Situação</th><th>Detalhe</th></tr></thead><tbody>'+
     itens.map(function(it){
       var st=it._gravado?"gravado":it.situacao;
-      var det=it._gravado ? (it.paginas+" pág, "+it.blocos+" blocos"+(it.figuras?", "+it.figuras+" figuras":"")) : (it.motivo||"");
+      var det=it._gravado ? (it.paginas+" pág, "+it.blocos+" blocos"+(it.figuras?", "+it.figuras+" figuras":"")+(it.aviso_figuras?". Recortes de figura falharam: "+it.aviso_figuras:"")) : (it.motivo||"");
       return '<tr><td>'+esc(it.arquivo||it.slug||"?")+'</td><td>'+(it.paginas||"-")+'</td>'+
              '<td><span class="up-st '+st+'">'+(_UP_ROT[st]||st)+'</span></td><td style="color:var(--cinza)">'+esc(det)+'</td></tr>';
     }).join("")+'</tbody></table>';

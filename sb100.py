@@ -107,6 +107,8 @@ def _rodar(script: str, *args, env=None) -> None:
 def _resumo(rel: dict, chave: str = "arquivo") -> None:
     for g in rel.get("gravados", []) + rel.get("confirmados", []):
         print(f"  ok        {g.get(chave) or g.get('slug') or g.get('pdf_id')}")
+        if g.get("aviso_figuras"):
+            print(f"            recortes de figura falharam: {g['aviso_figuras']}")
     for g in rel.get("pulados", []) + rel.get("falhas", []) + rel.get("recusados", []):
         print(f"  {g.get('situacao', 'recusado'):<9} {g.get(chave) or g.get('slug') or g.get('pdf_id')}"
               f": {g.get('motivo', '')}")
