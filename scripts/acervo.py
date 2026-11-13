@@ -168,18 +168,15 @@ def baixar(est: dict) -> None:
     for i, (slug, nome) in enumerate(fila, 1):
         destino = PASTA / nome
         try:
-            r = requests.get(f"{API_BASE}/api/documents/{requests.utils.quote(nome)}",
-                             headers={"Authorization": f"Bearer {tok}"}, timeout=180)
-            r.raise_for_status()
-            if not r.content.startswith(b"%PDF"):
-                raise ValueError(f"resposta não é PDF ({r.content[:8]!r})")
+            # a curadoria devolve o PDF puro ou, desde nov/2026, um zip com PDF + json
+            dados = curadoria.baixar_pdf(nome, tok)
             # grava ao lado e só então renomeia: um Ctrl-C no meio não deixa
             # um .pdf truncado que a próxima varredura contaria como pronto
             tmp = destino.with_suffix(".pdf.parcial")
-            tmp.write_bytes(r.content)
+            tmp.write_bytes(dados)
             tmp.replace(destino)
             est["disco"][slug] = destino
-            print(f"  [{i:>3}/{len(fila)}] {len(r.content)/1024:>7.0f} KB  {nome[:56]}")
+            print(f"  [{i:>3}/{len(fila)}] {len(dados)/1024:>7.0f} KB  {nome[:56]}")
             ok += 1
         except Exception as e:
             print(f"  [{i:>3}/{len(fila)}] ERRO {nome[:46]}: {str(e)[:70]}")

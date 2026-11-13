@@ -9,8 +9,10 @@ O schema da API já mudou uma vez — as chaves eram em português com espaços
 Por isso o registro cru vai inteiro para `article_metadata.raw` e o mapeamento
 fica só em CAMPOS: quando ela mudar de novo, é um lugar para ajustar.
 """
+import io
 import os
 import re
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -71,14 +73,33 @@ def baixar(token: str | None = None) -> list[dict]:
     return artigos
 
 
+def pdf_da_resposta(conteudo: bytes, nome: str) -> bytes:
+    """O PDF dentro da resposta de /api/documents/{nome}.
+
+    Até outubro de 2026 a curadoria devolvia o PDF puro; desde novembro devolve
+    um zip com o PDF e um .json de metadados (os mesmos campos do /api/curation).
+    Aceita os dois formatos."""
+    if conteudo.startswith(b"%PDF"):
+        return conteudo
+    if conteudo.startswith(b"PK"):
+        with zipfile.ZipFile(io.BytesIO(conteudo)) as z:
+            pdfs = [i for i in z.namelist() if i.lower().endswith(".pdf")]
+            igual = [i for i in pdfs if Path(i).name == Path(nome).name]
+            if igual or len(pdfs) == 1:
+                dados = z.read((igual or pdfs)[0])
+                if dados.startswith(b"%PDF"):
+                    return dados
+            raise RuntimeError(f"o zip da curadoria para {nome} não tem um PDF reconhecível "
+                               f"(arquivos: {z.namelist()[:5]})")
+    raise RuntimeError(f"a curadoria não devolveu um PDF para {nome} ({conteudo[:8]!r})")
+
+
 def baixar_pdf(nome: str, token: str | None = None) -> bytes:
     """O PDF que a curadoria guarda com esse nome (o mesmo caminho do scripts/acervo.py)."""
     r = requests.get(f"{API_BASE}/api/documents/{requests.utils.quote(nome)}",
                      headers={"Authorization": f"Bearer {token or _token()}"}, timeout=300)
     r.raise_for_status()
-    if not r.content.startswith(b"%PDF"):
-        raise RuntimeError(f"a curadoria não devolveu um PDF para {nome}")
-    return r.content
+    return pdf_da_resposta(r.content, nome)
 
 
 def aprovado(a: dict) -> bool:
