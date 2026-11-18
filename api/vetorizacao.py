@@ -112,13 +112,20 @@ def _descricao(texto: str) -> str:
     return texto
 
 
-def criar_colecao(nome: str, descricao: str = "", quem: str = "") -> dict:
+def criar_colecao(nome: str, descricao: str = "", quem: str = "",
+                  estrategia: str = "recursive") -> dict:
     """Cria a coleção e grava nela, como metadado do próprio Qdrant, a descrição
     escrita por quem criou e o que já se sabe na hora: data, autor, modelos e
-    fatiamento. Fica junto da coleção, para quem a consultar de outro lugar."""
+    fatiamento. Fica junto da coleção, para quem a consultar de outro lugar.
+
+    A estratégia de chunking (do LangChain) é escolhida aqui e não muda depois:
+    todo pacote desta coleção sai com ela, então os trechos nunca se misturam."""
     if not _NOME_OK.match(nome or ""):
         raise ValueError("nome: 3 a 63 caracteres, só minúsculas, números e _")
     descricao = _descricao(descricao)
+    estrategia = (estrategia or "").strip().lower()
+    if estrategia not in chunker.ESTRATEGIAS:
+        raise ValueError(f"estratégia de chunking: escolha {', '.join(chunker.ESTRATEGIAS)}")
     existentes = {c["name"] for c in _req("GET", "/collections")["result"]["collections"]}
     if nome in existentes:
         raise ValueError(f"a coleção {nome} já existe")
@@ -131,7 +138,8 @@ def criar_colecao(nome: str, descricao: str = "", quem: str = "") -> dict:
             "criada_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "criada_por": quem, "modelo_denso": MODELO_DENSO, "modelo_esparso": MODELO_ESPARSO,
             "chunk": chunker.TAMANHO, "sobreposicao": chunker.SOBREPOSICAO,
-            "versao_chunker": chunker.VERSAO}
+            "estrategia": estrategia, "chunk_biblioteca": "langchain-text-splitters",
+            "versao_chunker": chunker.versao(estrategia)}
     _req("PATCH", f"/collections/{nome}", json={"metadata": info})
     return {"nome": nome, "pontos": 0, "compativel": True, "motivo": "",
             "teste": nome.startswith("teste_"), "info": info}
@@ -247,7 +255,8 @@ def config_da_colecao(colecao: str) -> dict | None:
     """Fatiamento dos pontos que já estão lá, para avisar quando misturar."""
     r = _req("POST", f"/collections/{colecao}/points/scroll",
              json={"limit": 1, "with_payload": ["config_chunk", "config_overlap",
-                                                 "chunk_type", "versao_chunker"],
+                                                 "chunk_type", "versao_chunker",
+                                                 "estrategia_chunk"],
                    "with_vector": False})["result"]["points"]
     return (r[0].get("payload") or {}) if r else None
 
@@ -349,6 +358,14 @@ def _utc(quando: str | None) -> str:
     return quando if quando.endswith("Z") or quando[-6:-5] in "+-" else quando + "+00:00"
 
 
+def estrategia_da_colecao(colecao: str) -> str:
+    """A estratégia gravada no metadado da coleção. Coleção criada antes da
+    escolha existir não tem: segue com a `blocos`, a de sempre, para os pontos
+    novos não se misturarem com os que já estão lá."""
+    meta = (_req("GET", f"/collections/{colecao}")["result"].get("config") or {}).get("metadata") or {}
+    return chunker.normalizar_estrategia(meta.get("estrategia"))
+
+
 def montar_pacote(sb, colecao: str, ids: list[str], quem: str) -> tuple[bytes, dict]:
     if not ids:
         raise ValueError("escolha ao menos um documento")
@@ -362,11 +379,12 @@ def montar_pacote(sb, colecao: str, ids: list[str], quem: str) -> tuple[bytes, d
     metas = {m["pdf_id"]: m for m in sb.table("article_metadata").select("*")
              .in_("pdf_id", ids).execute().data}
 
+    estrategia = estrategia_da_colecao(colecao)
     pacote = datetime.now().strftime("%Y%m%d-%H%M") + "-" + uuid.uuid4().hex[:6]
     man = {"pacote": pacote, "colecao": colecao, "criado_por": quem,
            "criado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
            "chunk": {"tamanho": chunker.TAMANHO, "sobreposicao": chunker.SOBREPOSICAO,
-                     "versao": chunker.VERSAO},
+                     "estrategia": estrategia, "versao": chunker.versao(estrategia)},
            "modelos": MODELOS, "documentos": [],
            # só a URL: a chave quem tem é quem roda, e ela não viaja no pacote
            "qdrant_url": _qd()[0]}
@@ -386,7 +404,7 @@ def montar_pacote(sb, colecao: str, ids: list[str], quem: str) -> tuple[bytes, d
                 "extraido_em": _utc(p.get("extracted_at"))})
         z.writestr("pacote.json", json.dumps(man, ensure_ascii=False, indent=1))
     return buf.getvalue(), {"pacote": pacote, "documentos": len(man["documentos"]),
-                            "colecao": colecao}
+                            "colecao": colecao, "estrategia": estrategia}
 
 
 # ───────────────────────── vetores de volta ─────────────────────────────────
@@ -449,6 +467,15 @@ def conferir_vetores(sb, pasta: Path, colecao: str | None = None) -> dict:
         avisos.append(f"a coleção já tem trechos de {atual.get('config_chunk')} com sobreposição "
                       f"{atual.get('config_overlap')}; este pacote usa {man['chunk']['tamanho']}/"
                       f"{man['chunk']['sobreposicao']}. Misturar fatiamentos atrapalha a busca.")
+    # o pacote sai com a estratégia da coleção; diferente só se o zip foi mandado
+    # para outra coleção (--colecao) ou feito antes da escolha existir
+    est_pacote = chunker.normalizar_estrategia(man["chunk"].get("estrategia"))
+    est_col = chunker.normalizar_estrategia(
+        (cols[col].get("info") or {}).get("estrategia")
+        or (atual or {}).get("estrategia_chunk"))
+    if atual and est_col != est_pacote:
+        avisos.append(f"a coleção usa o chunking {est_col}; este pacote foi fatiado com "
+                      f"{est_pacote}. Misturar estratégias atrapalha a busca.")
 
     pontos = pontos_por_documento(sb, col, usar_cache=False)
     itens = []

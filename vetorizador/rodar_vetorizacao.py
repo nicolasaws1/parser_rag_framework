@@ -16,9 +16,10 @@ O zip é gerado nos dois casos, como cópia de segurança.
 
 A chave nunca vai no pacote nem no repositório: o notebook pede na hora.
 
-O fatiamento é o de api/chunker.py, o mesmo que o site usaria: 1024 caracteres,
-20% de sobreposição, tabela e figura inteiras. Os modelos estão em
-vetorizador/embeddings.py.
+O fatiamento é o de api/chunker.py: 1024 caracteres, 20% de sobreposição, tabela
+e figura inteiras, e o texto corrido pela estratégia da coleção (recursive,
+struct, semantic ou fixed, do LangChain; `blocos` nas coleções antigas). A
+estratégia vem no pacote. Os modelos estão em vetorizador/embeddings.py.
 
 Documento que já tem pontos na coleção (gravados por aqui ou pelos scripts
 antigos) é pulado antes de calcular, a menos que se passe --substituir: aí os
@@ -90,7 +91,7 @@ class Qdrant:
             raise RuntimeError(f"Qdrant {r.status_code}: {r.text[:200]}")
         return r.json()
 
-    def conferir_colecao(self, col: str) -> None:
+    def conferir_colecao(self, col: str, estrategia: str | None = None) -> None:
         try:
             info = self.req("GET", f"/collections/{col}")["result"]
         except RuntimeError as e:
@@ -99,6 +100,12 @@ class Qdrant:
             if "401" in str(e) or "403" in str(e):
                 sys.exit("o Qdrant recusou a chave (QDRANT_API_KEY)")
             raise
+        # a estratégia de chunking é da coleção: gravar outra misturaria trechos incompatíveis
+        meta = (info.get("config") or {}).get("metadata") or {}
+        if estrategia and chunker.normalizar_estrategia(meta.get("estrategia")) != estrategia:
+            sys.exit(f"a coleção {col} usa o chunking "
+                     f"{chunker.normalizar_estrategia(meta.get('estrategia'))} e este pacote foi "
+                     f"fatiado com {estrategia}: baixe um pacote para {col} na aba Vetorização")
         p = info.get("config", {}).get("params", {})
         v = p.get("vectors") or {}
         if not (isinstance(v, dict) and (v.get(NOME_DENSO) or {}).get("size") == DIM
@@ -170,11 +177,12 @@ def main() -> None:
         print(f"coleção trocada: o pacote pedia {man['colecao']}, vai para {col}")
         man["colecao"] = col
     ck = man["chunk"]
-    if ck.get("versao") != chunker.VERSAO:
-        print(f"aviso: pacote feito com {ck.get('versao')}, este código é {chunker.VERSAO}")
+    estrategia = chunker.normalizar_estrategia(ck.get("estrategia"))
+    if ck.get("versao") != chunker.versao(estrategia):
+        print(f"aviso: pacote feito com {ck.get('versao')}, este código é {chunker.versao(estrategia)}")
     docs = man["documentos"]
     print(f"pacote {man['pacote']}: {len(docs)} documento(s) para a coleção {col}")
-    print(f"fatiamento: {ck['tamanho']} caracteres, sobreposição {ck['sobreposicao']}\n")
+    print(f"fatiamento: {estrategia}, {ck['tamanho']} caracteres, sobreposição {ck['sobreposicao']}\n")
 
     qd = None
     if a.enviar:
@@ -183,7 +191,7 @@ def main() -> None:
         if not url or not chave:
             sys.exit("--enviar precisa de QDRANT_API_KEY (e da URL, que vem no pacote ou em QDRANT_URL)")
         qd = Qdrant(url, chave)
-        qd.conferir_colecao(col)
+        qd.conferir_colecao(col, estrategia)
         ja = {d["pdf_id"]: qd.pontos_do_documento(col, d) for d in docs}
         tem = [d for d in docs if ja[d["pdf_id"]]]
         if tem and not a.substituir:
@@ -212,7 +220,8 @@ def main() -> None:
     for i, d in enumerate(pendentes, 1):
         t0 = time.time()
         paginas = json.loads((trab / "docs" / d["slug"] / "blocos.json").read_text(encoding="utf-8"))
-        trechos = chunker.gerar_chunks(paginas, ck["tamanho"], ck["sobreposicao"])
+        trechos = chunker.gerar_chunks(paginas, ck["tamanho"], ck["sobreposicao"], estrategia,
+                                       embed_fn=getattr(emb, "matriz", None))
         if not trechos:
             print(f"  [{i}/{len(pendentes)}] {d['pdf_file'][:50]}: sem texto, pulado")
             continue
@@ -223,10 +232,10 @@ def main() -> None:
         with open(tmp, "w", encoding="utf-8") as f:
             for c, dn, es in zip(trechos, densos, esparsos):
                 f.write(json.dumps({
-                    "id": chunker.id_do_ponto(col, d["pdf_id"], c["indice"]),
+                    "id": chunker.id_do_ponto(col, d["pdf_id"], c["indice"], estrategia),
                     "pdf_id": d["pdf_id"],
                     "payload": chunker.montar_payload(c, d, col, modelos, ingestao,
-                                                      ck["tamanho"], ck["sobreposicao"]),
+                                                      ck["tamanho"], ck["sobreposicao"], estrategia),
                     "denso": dn, "esparso": es}, ensure_ascii=False) + "\n")
         tmp.replace(partes / f"{d['pdf_id']}.jsonl")
         tipos = {}

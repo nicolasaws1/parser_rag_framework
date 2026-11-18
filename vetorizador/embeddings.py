@@ -49,6 +49,12 @@ class Embedder:
                                  normalize_embeddings=True, show_progress_bar=False)
         return [base64.b64encode(np.asarray(e, dtype="<f4").tobytes()).decode() for e in emb]
 
+    def matriz(self, textos: list[str]):
+        """Vetores densos normalizados, em numpy: o chunking semantic mede com eles
+        a distância entre frases vizinhas."""
+        return self._denso.encode(textos, batch_size=self.lote, convert_to_numpy=True,
+                                  normalize_embeddings=True, show_progress_bar=False)
+
     def esparso(self, textos: list[str]) -> list[dict]:
         t = self.torch
         fora = []

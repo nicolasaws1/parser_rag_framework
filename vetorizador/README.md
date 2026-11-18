@@ -30,6 +30,32 @@ Coleção que não tem os vetores `vetor_denso` (1024, cosseno) e `vetor_esparso
 aparece desabilitada. Coleção nova só o admin cria; nome começando com `teste_`
 fica marcado como teste.
 
+## Estratégia de chunking
+
+Ao criar a coleção (botão **+**), o admin escolhe como o texto corrido é fatiado,
+com os splitters do LangChain. Tamanho (1024 caracteres) e sobreposição (205) são
+os mesmos nas quatro, e tabela e figura entram sempre inteiras.
+
+| estratégia | como corta |
+|---|---|
+| `recursive` (padrão) | `RecursiveCharacterTextSplitter`: parágrafo, depois linha, depois palavra |
+| `struct` | nos títulos de seção do artigo, e o `recursive` dentro de cada seção; o título vai no payload (`secao`) |
+| `semantic` | algoritmo do `SemanticChunker`: o Qwen3 compara frases vizinhas e corta nas 5% mais distantes; trecho maior que 1024 é subdividido pelo `recursive` |
+| `fixed` | janelas de 1024 sem olhar o texto (corta palavras); serve de referência |
+
+A estratégia fica no metadado da coleção (`estrategia`) e não muda depois: todo
+pacote da coleção sai com ela, e o `rodar_vetorizacao.py` recusa gravar um pacote
+de outra estratégia (`--colecao` apontando para a coleção errada). Coleções
+criadas antes da escolha (`sb100`, `sb100_clone`...) não têm o metadado e
+continuam com a `blocos`, a de sempre, com os mesmos ids de ponto. Cada ponto
+leva `estrategia_chunk` e `chunk_type` (`langchain_<estratégia>` ou `sb100_blocos`).
+
+O `struct` reconhece o título pela forma do bloco (linha curta, sem ponto final,
+numerada, em caixa alta ou com nome de seção conhecido), porque a extração guarda
+o texto sem o `#`. Cabeçalho que se repete em 3 páginas ou mais (nome da revista)
+não abre seção. Definições iguais às do estudo de chunking do TG; código em
+`api/chunker.py`.
+
 ## Passo a passo (GPU)
 
 1. Aba **Vetorização**: escolha a coleção, marque os documentos (o filtro padrão

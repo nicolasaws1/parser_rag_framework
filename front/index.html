@@ -732,7 +732,18 @@
         </div>
         <textarea id="vet-nova-desc" class="vet-txtarea" maxlength="2000" style="margin-top:8px"
           placeholder="Descrição: para que serve esta coleção. Ex.: coleção sb2, para testar a vetorização com o Qwen3-Embedding-0.6B em trechos de 1024 caracteres, com os artigos de citros e cana."></textarea>
-        <div style="font-size:11.5px;color:var(--cinza);margin-top:4px">A data, quem criou, os modelos e o tamanho dos trechos ficam registrados sozinhos junto com a descrição, na própria coleção do Qdrant.</div>
+        <div class="vet-barra" style="margin-top:10px">
+          <label for="vet-nova-estrategia" style="font-size:12.5px;font-weight:700">Chunking (LangChain)</label>
+          <select id="vet-nova-estrategia" onchange="vetEstrategiaDica()">
+            <option value="recursive" selected>recursive</option>
+            <option value="struct">struct</option>
+            <option value="semantic">semantic</option>
+            <option value="fixed">fixed</option>
+          </select>
+          <span style="font-size:11.5px;color:var(--cinza)">1024 caracteres, 205 de sobreposição; tabela e figura sempre inteiras</span>
+        </div>
+        <div id="vet-estrategia-dica" style="font-size:12px;margin-top:4px"></div>
+        <div style="font-size:11.5px;color:var(--cinza);margin-top:4px">A data, quem criou, os modelos, o tamanho dos trechos e a estratégia de chunking ficam registrados sozinhos junto com a descrição, na própria coleção do Qdrant. A estratégia não muda depois: todo pacote desta coleção sai fatiado com ela.</div>
         <div class="up-acoes" style="margin-top:8px">
           <button class="up-btn" onclick="vetCriarColecao()">Criar coleção</button>
           <button class="up-btn sec" onclick="vetNovaAbrir(false)">Cancelar</button>
@@ -1712,15 +1723,28 @@ function vetNovaAbrir(abrir){
   if(abrir && CARGO!=="admin") return;
   f.style.display = abrir ? "block" : "none";
   if(b){ b.classList.toggle("aberto", abrir); b.title = abrir ? "Fechar" : "Criar uma coleção nova"; }
-  if(abrir) el("vet-nova-nome").focus();
+  if(abrir){ vetEstrategiaDica(); el("vet-nova-nome").focus(); }
+}
+/* estratégias de chunking do texto corrido (api/chunker.py); as mesmas do estudo do TG */
+var VET_ESTRATEGIAS={
+  recursive:"Corta de preferência entre parágrafos, depois entre linhas e só então entre palavras (RecursiveCharacterTextSplitter). Recomendada: no estudo do TG empatou com struct e semantic e ganhou da fixed.",
+  struct:"Divide nas seções do artigo (Introdução, Material e Métodos, Resultados…) e aplica o recursive dentro de cada uma: nenhum trecho junta duas seções. O título da seção vai no payload.",
+  semantic:"Corta onde o assunto muda: o Qwen3 compara frases vizinhas e corta nas 5% mais distantes (algoritmo do SemanticChunker). Mais lento, porque calcula embeddings também para fatiar.",
+  fixed:"Janelas de 1024 caracteres sem olhar o texto: corta palavras e frases no meio. Serve de referência para comparar as outras.",
+  blocos:"A estratégia anterior à escolha: janelas de 1024 caracteres cortadas no último espaço. As coleções antigas continuam com ela, para os trechos não se misturarem."
+};
+function vetEstrategiaDica(){
+  var s=el("vet-nova-estrategia"), d=el("vet-estrategia-dica");
+  if(s&&d) d.textContent=VET_ESTRATEGIAS[s.value]||"";
 }
 async function vetCriarColecao(){
   var nome=(el("vet-nova-nome").value||"").trim(), desc=(el("vet-nova-desc").value||"").trim();
+  var est=el("vet-nova-estrategia").value;
   if(!nome) return;
   if(desc.length<10){ alert("Escreva uma descrição para a coleção (pelo menos 10 caracteres)."); el("vet-nova-desc").focus(); return; }
-  if(!confirm("Criar a coleção "+nome+" no Qdrant?")) return;
+  if(!confirm("Criar a coleção "+nome+" no Qdrant, com chunking "+est+"?\n\nA estratégia não muda depois.")) return;
   try{
-    var r=await apiFetch(API+"/vetorizacao/colecoes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome:nome, descricao:desc})});
+    var r=await apiFetch(API+"/vetorizacao/colecoes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome:nome, descricao:desc, estrategia:est})});
     var j=await r.json(); if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
     el("vet-nova-nome").value=""; el("vet-nova-desc").value=""; VET_SEL.clear(); vetNovaAbrir(false);
     try{ localStorage.setItem("sb100_vet_col", j.nome); }catch(_){}
@@ -1746,6 +1770,8 @@ function vetMostrarDescricao(editando){
   if(i.criada_em) partes.push("criada em "+_dataBr(i.criada_em)+(i.criada_por?" por "+esc(i.criada_por):""));
   if(i.modelo_denso) partes.push(esc(i.modelo_denso.split("/").pop())+" + "+esc(String(i.modelo_esparso||"").split("/").pop()));
   if(i.chunk) partes.push("trechos de "+i.chunk+" caracteres ("+i.sobreposicao+" de sobreposição)");
+  // coleção sem estratégia no metadado foi criada antes da escolha: usa a "blocos"
+  var est=i.estrategia||"blocos";
   if(i.descricao_editada_em) partes.push("descrição editada em "+_dataBr(i.descricao_editada_em)+(i.descricao_editada_por?" por "+esc(i.descricao_editada_por):""));
   // uma linha só; data, autor e modelos aparecem ao passar o mouse no texto
   box.innerHTML='<div class="vet-desc-linha"><b>Descrição:</b> '+
@@ -1754,7 +1780,10 @@ function vetMostrarDescricao(editando){
     (admin?'<button class="vet-lapis" onclick="vetMostrarDescricao(true)" title="Editar descrição" aria-label="Editar descrição">'+
       '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'+
       '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>':'')+
-    '</div>';
+    '</div>'+
+    '<div class="vet-desc-linha" style="margin-top:4px"><b>Chunking:</b> '+
+    '<span title="'+esc(VET_ESTRATEGIAS[est]||"")+'" style="padding:1px 8px;border-radius:10px;background:var(--borda);font-size:12px">'+
+      esc(est==="blocos"?"blocos (padrão anterior)":est)+'</span></div>';
 }
 async function vetSalvarDescricao(){
   var t=(el("vet-desc-ed").value||"").trim();

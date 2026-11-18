@@ -4,4 +4,5 @@ torch
 transformers
 sentence-transformers>=3.0
 numpy
+langchain-text-splitters>=0.3   # chunking recursive/struct/semantic/fixed das coleções novas
 requests

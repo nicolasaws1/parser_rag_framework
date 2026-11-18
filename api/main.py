@@ -830,6 +830,7 @@ VET_NOTEBOOK_URL = REPO_RAW + "vetorizador/vetorizador_lote.ipynb"
 class NovaColecao(BaseModel):
     nome: str
     descricao: str = ""
+    estrategia: str = "recursive"      # chunking do LangChain: recursive, struct, semantic, fixed
 
 
 class DescricaoColecao(BaseModel):
@@ -866,11 +867,13 @@ def vet_criar_colecao(nova: NovaColecao, pedido: Request):
     """Só admin: coleção nova é decisão de projeto, não de curadoria."""
     quem = auth.exigir_cargo(pedido, sb, "admin")
     try:
-        c = _qdrant_ou_502(_vet().criar_colecao, nova.nome.strip(), nova.descricao, quem["email"])
+        c = _qdrant_ou_502(_vet().criar_colecao, nova.nome.strip(), nova.descricao, quem["email"],
+                           nova.estrategia)
     except ValueError as e:
         raise HTTPException(400, str(e))
     registrar("documento_editado", quem["email"], None,
-              {"acao": "colecao_criada", "colecao": c["nome"], "descricao": c["info"]["descricao"]},
+              {"acao": "colecao_criada", "colecao": c["nome"], "descricao": c["info"]["descricao"],
+               "estrategia": c["info"]["estrategia"]},
               pedido.client.host if pedido.client else None)
     return c
 

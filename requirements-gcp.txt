@@ -26,6 +26,7 @@ jinja2>=3.1.6
 # vetorização
 sentence-transformers>=3.0,<7
 numpy
+langchain-text-splitters>=0.3   # chunking recursive/struct/semantic/fixed das coleções novas
 
 # sb100.py conversa com o site por HTTP
 requests
