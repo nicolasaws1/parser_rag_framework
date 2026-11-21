@@ -9,6 +9,12 @@ subprocess.run([sys.executable,"-m","pip","install","-q",
     *['chandra-ocr[hf]','doclayout-yolo','PyMuPDF','beautifulsoup4','Pillow','pandas','huggingface_hub']],
     check=False)
 
+# O cache de atencao cresce a cada token gerado e e' realocado inteiro; com lote
+# grande a memoria fragmenta e a placa "quase estoura" a cada passo (avisos
+# "memory allocation failed with OOM" em serie, e tudo fica lento). Segmentos
+# expansiveis evitam a fragmentacao. Tem de valer antes de importar o torch.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
 import torch, fitz
 from PIL import Image
 from bs4 import BeautifulSoup
@@ -44,14 +50,16 @@ LIMPAR_VRAM = os.environ.get("LIMPAR_VRAM", "0") == "1"
 # tamanho da imagem: MEDIR num documento antes de confiar. Cada pagina em memoria
 # custa ~15 MB, entao 8 paginas sao 120 MB dos 53 GB de RAM do sistema.
 def _lote_automatico():
-    """LOTE_PAGINAS=0 (ou "auto"): pela VRAM da placa. O modelo ocupa ~11 GB e
-    cada pagina no lote ~1 GB (medido numa A100: 11 paginas, 22,4 GB); conta 2 GB
-    por pagina para sobrar folga. A100 80 GB -> 32, A100 40 GB -> 12, L4 -> 4."""
+    """LOTE_PAGINAS=0 (ou "auto"): pela VRAM da placa. O modelo ocupa ~11 GB. Um
+    lote de 11 paginas do mesmo PDF ficou em 22,4 GB numa A100, mas 32 paginas de
+    PDFs diferentes encheram os 80 GB (21/11/2026): a memoria de todas cresce ate'
+    a pagina mais longa do lote. Conta 4 GB por pagina.
+    A100 80 GB -> 16, A100 40 GB -> 6, L4 -> 2."""
     try:
         gb = torch.cuda.get_device_properties(0).total_memory / 2**30
     except Exception:
         return 1, "sem GPU"
-    return max(1, min(48, int((gb - 14) / 2))), f"GPU com {gb:.0f} GB"
+    return max(1, min(24, int((gb - 14) / 4))), f"GPU com {gb:.0f} GB"
 
 _lote = (os.environ.get("LOTE_PAGINAS") or "1").strip().lower()
 if _lote in ("0", "auto"):

@@ -154,7 +154,7 @@ sb100-extrair --quantos 10
 Para mandar várias páginas por vez ao Chandra, somando PDFs (o lote continua
 nos próximos PDFs da fila). A cada chamada aparece uma linha
 `⚡ Chandra: N paginas ... s/pagina`, para comparar com o valor de antes. Com `0`
-o tamanho é escolhido pela memória da placa (4 na L4, 32 na A100 80 GB); se
+o tamanho é escolhido pela memória da placa (2 na L4, 16 na A100 80 GB); se
 faltar memória, o lote é dividido sozinho:
 
 ```bash

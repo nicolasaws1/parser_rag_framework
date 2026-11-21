@@ -62,7 +62,7 @@ dava ~10). As figuras de cada página também vão numa chamada só. A cada cham
 sai `⚡ Chandra: N paginas de K PDF(s) ... s/pagina`, o número para comparar.
 Cada página no lote ocupa ~1 GB de VRAM (medido numa A100: 11 páginas, 22,4 GB
 com o modelo). `LOTE_PAGINAS = 0` (o padrão dos notebooks) escolhe pela VRAM,
-contando 2 GB por página: 32 na A100 80 GB, 12 na A100 40 GB, 4 na L4. Se faltar memória, o lote
+contando 4 GB por página: 16 na A100 80 GB, 6 na A100 40 GB, 2 na L4 (com 32 numa A100 80 GB a memória encheu: a de cada página cresce até a mais longa do lote). Se faltar memória, o lote
 é dividido ao meio sozinho e o tamanho que coube vale para o resto da rodada. O
 resultado é o mesmo de uma página por vez (conferido com Chandra e YOLO
 simulados, em `layout.json`).

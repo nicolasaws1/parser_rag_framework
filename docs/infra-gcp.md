@@ -218,7 +218,7 @@ na Home, depois os menores. Para escolher os documentos:
 | `sb100-extrair --maiores --quantos 10` | os maiores primeiro |
 Para comparar a velocidade, `LOTE_PAGINAS=0 sb100-extrair --quantos 10` manda
 várias páginas por vez ao Chandra, somando PDFs da fila, com o tamanho escolhido
-pela memória da placa (4 na L4, 32 na A100 80 GB); a cada chamada sai uma linha
+pela memória da placa (2 na L4, 16 na A100 80 GB); a cada chamada sai uma linha
 `⚡ Chandra: ... s/pagina`. Se faltar memória, o lote é dividido sozinho.
 
 ## Tempo de máquina
