@@ -216,10 +216,10 @@ na Home, depois os menores. Para escolher os documentos:
 | `sb100-extrair --ids <id>,<id>,...` | exatamente esses. Na aba **Extração** do site, marque os documentos e clique em **Copiar comando para a VM**: o comando vem pronto |
 | `sb100-extrair --solicitados --quantos 10` | só os pedidos em **Solicitar extração** na Home |
 | `sb100-extrair --maiores --quantos 10` | os maiores primeiro |
-Para comparar a velocidade, `LOTE_PAGINAS=8 sb100-extrair --quantos 10` manda 8
-páginas por vez ao Chandra, somando PDFs da fila; a cada chamada sai uma linha
-`⚡ Chandra: ... s/pagina`. Na L4, 8 cabe; na A100 80 GB, 32. Se faltar memória,
-o lote é dividido sozinho.
+Para comparar a velocidade, `LOTE_PAGINAS=0 sb100-extrair --quantos 10` manda
+várias páginas por vez ao Chandra, somando PDFs da fila, com o tamanho escolhido
+pela memória da placa (4 na L4, 32 na A100 80 GB); a cada chamada sai uma linha
+`⚡ Chandra: ... s/pagina`. Se faltar memória, o lote é dividido sozinho.
 
 ## Tempo de máquina
 

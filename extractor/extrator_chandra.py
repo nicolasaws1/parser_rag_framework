@@ -43,7 +43,22 @@ LIMPAR_VRAM = os.environ.get("LIMPAR_VRAM", "0") == "1"
 # sequencia sozinha nao satura a placa. Quanto ajuda depende do modelo e do
 # tamanho da imagem: MEDIR num documento antes de confiar. Cada pagina em memoria
 # custa ~15 MB, entao 8 paginas sao 120 MB dos 53 GB de RAM do sistema.
-LOTE_PAGINAS = int(os.environ.get("LOTE_PAGINAS", "1"))
+def _lote_automatico():
+    """LOTE_PAGINAS=0 (ou "auto"): pela VRAM da placa. O modelo ocupa ~11 GB e
+    cada pagina no lote ~1 GB (medido numa A100: 11 paginas, 22,4 GB); conta 2 GB
+    por pagina para sobrar folga. A100 80 GB -> 32, A100 40 GB -> 12, L4 -> 4."""
+    try:
+        gb = torch.cuda.get_device_properties(0).total_memory / 2**30
+    except Exception:
+        return 1, "sem GPU"
+    return max(1, min(48, int((gb - 14) / 2))), f"GPU com {gb:.0f} GB"
+
+_lote = (os.environ.get("LOTE_PAGINAS") or "1").strip().lower()
+if _lote in ("0", "auto"):
+    LOTE_PAGINAS, _motivo = _lote_automatico()
+    print(f"LOTE_PAGINAS automatico: {LOTE_PAGINAS} ({_motivo})")
+else:
+    LOTE_PAGINAS = max(1, int(_lote))
 MAX_PAGINAS = None
 TEXTO_MIN_CHARS = 120
 
