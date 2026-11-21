@@ -37,8 +37,9 @@ CHANDRA_MAX_LADO = int(os.environ.get("CHANDRA_MAX_LADO", "2200"))
 # e' so' custo. Ligue se aparecer out-of-memory.
 LIMPAR_VRAM = os.environ.get("LIMPAR_VRAM", "0") == "1"
 
-# Quantas paginas mandar ao Chandra numa chamada so'. 1 = comportamento de
-# sempre. Acima disso a GPU processa varias em paralelo, o que ajuda quando uma
+# Quantas paginas mandar ao Chandra numa chamada so', SOMANDO PDFs (o lote
+# continua nos proximos PDFs da fila; ver "LOTE ENTRE PDFs"). 1 = comportamento
+# de sempre. Acima disso a GPU processa varias em paralelo, o que ajuda quando uma
 # sequencia sozinha nao satura a placa. Quanto ajuda depende do modelo e do
 # tamanho da imagem: MEDIR num documento antes de confiar. Cada pagina em memoria
 # custa ~15 MB, entao 8 paginas sao 120 MB dos 53 GB de RAM do sistema.
@@ -302,6 +303,23 @@ def chandra_raw_lote(pils):
     return [((getattr(r, 'raw', '') or ''), im.size) for r, im in zip(res, ims)]
 
 
+def chandra_md_lote(pils):
+    """chandra_md de varios recortes numa chamada so' (as figuras de uma pagina)."""
+    try:
+        res = generate_hf([BatchInputItem(image=p.convert('RGB'), prompt_type='ocr_layout') for p in pils], chandra)
+    except torch.cuda.OutOfMemoryError:
+        torch.cuda.empty_cache()
+        return [chandra_md(p) for p in pils]
+    fora = []
+    for r in res:
+        raw = getattr(r,'raw','') or getattr(r,'markdown','') or ''
+        try: md_ = parse_markdown(raw)
+        except Exception: md_ = raw
+        fora.append(_anti_rep(md_ or ''))
+    if LIMPAR_VRAM: torch.cuda.empty_cache()
+    return fora
+
+
 def chandra_raw(pil):
     """Roda o Chandra e devolve o RAW (com <div data-bbox data-label>) + tamanho da imagem enviada."""
     im = pil.convert('RGB')
@@ -363,9 +381,13 @@ def blocos_chandra(im_hi, regioes=None, raw_pronto=None):
             if md.strip():
                 blocos.append({'tipo': 'texto', 'bbox': bbox, 'md': md, 'origem': 'chandra'})
     # FIGURAS pelo YOLO: recorte + Chandra OCR do crop (captura equação DENTRO do gráfico) + subclasse
-    for r in [r for r in (regioes or []) if r.get('tipo_rota') == 'figura']:
-        mdk = chandra_md(_crop_hi(im_hi, r['bbox']))
-        blocos.append({'tipo': classificar_figura(mdk, _crop_hi(im_hi, r['bbox'])), 'bbox': [round(v,4) for v in r['bbox']],
+    # Com LOTE_PAGINAS > 1 as figuras da pagina vao ao Chandra numa chamada so'
+    figs_reg = [r for r in (regioes or []) if r.get('tipo_rota') == 'figura']
+    recortes = [_crop_hi(im_hi, r['bbox']) for r in figs_reg]
+    mds = (chandra_md_lote(recortes) if LOTE_PAGINAS > 1 and len(recortes) > 1
+           else [chandra_md(c) for c in recortes])
+    for r, recorte, mdk in zip(figs_reg, recortes, mds):
+        blocos.append({'tipo': classificar_figura(mdk, recorte), 'bbox': [round(v,4) for v in r['bbox']],
                        'md': limpar_figura(mdk), 'conf': round(r.get('conf', 0), 3),
                        'origem': 'chandra-figura'})
     # aqui a ordenacao geometrica CONTINUA: o Chandra nao garante ordem de leitura
@@ -496,6 +518,90 @@ _medidor = _Medidor()
 
 def slugify(n): return re.sub(r'[^a-z0-9]+','-',Path(n).stem.lower()).strip('-')[:60]
 
+# ═══ LOTE ENTRE PDFs ═══
+# O LOTE_PAGINAS valia dentro de um PDF so': num acervo de artigos de ~10
+# paginas, pedir 50 dava ~10 por chamada e a GPU ficava ociosa. Agora o lote
+# continua nas paginas dos proximos PDFs da fila; o resultado de cada pagina fica
+# guardado ate' a vez do PDF dela, e o resto do processamento segue igual.
+_RAWS = {}      # (nome, pagina) -> raw do Chandra
+_IMGS = {}      # (nome, pagina) -> render_paginas() ja' feito, para nao renderizar 2x
+_FDOCS = {}
+
+def _fdoc(nome):
+    if nome not in _FDOCS:
+        _FDOCS[nome] = fitz.open(str(PDFS_DIR/nome))
+    return _FDOCS[nome]
+
+def _esquecer(nome):
+    """Solta o que sobrou de um PDF (terminou ou deu erro)."""
+    for k in [k for k in _RAWS if k[0] == nome]: _RAWS.pop(k, None)
+    for k in [k for k in _IMGS if k[0] == nome]: _IMGS.pop(k, None)
+    d = _FDOCS.pop(nome, None)
+    if d is not None: d.close()
+
+def _fila_de_paginas(nome, pno):
+    """(nome, pagina) a partir desta, na ordem em que o laco vai pedir: o resto
+    deste PDF e depois os proximos ainda nao extraidos."""
+    i = TARGETS.index(nome)
+    for k, n in enumerate(TARGETS[i:]):
+        if k and (EXPORT_DIR/slugify(n)/'layout.json').exists():
+            continue
+        try:
+            N = len(_fdoc(n))
+        except Exception:
+            continue                     # PDF que nao abre falha na vez dele, nao aqui
+        lim = N if MAX_PAGINAS is None else min(N, MAX_PAGINAS)
+        for q in range(pno if k == 0 else 1, lim + 1):
+            yield n, q
+
+def _chandra_seguro(ims):
+    """Chama o lote; sem memoria, divide ao meio e tenta de novo. O tamanho que
+    coube vira o LOTE_PAGINAS do resto da rodada, para nao estourar de novo."""
+    global LOTE_PAGINAS
+    try:
+        return [rw for rw, _ in chandra_raw_lote(ims)]
+    except torch.cuda.OutOfMemoryError:
+        torch.cuda.empty_cache()
+        if len(ims) == 1:
+            raise
+        m = len(ims) // 2
+        LOTE_PAGINAS = max(1, min(LOTE_PAGINAS, m))
+        print(f"    ⚠️  sem memoria para {len(ims)} paginas de uma vez; dividindo em {m} + {len(ims)-m} "
+              f"(LOTE_PAGINAS={LOTE_PAGINAS} daqui em diante)")
+        return _chandra_seguro(ims[:m]) + _chandra_seguro(ims[m:])
+
+def _preparar_lote(nome, pno):
+    global LOTE_PAGINAS
+    chaves = []
+    for ch in _fila_de_paginas(nome, pno):
+        if ch not in _RAWS:
+            chaves.append(ch)
+        if len(chaves) >= LOTE_PAGINAS:
+            break
+    ims, validas = [], []
+    for n, q in chaves:
+        try:
+            r = _IMGS.get((n, q)) or render_paginas(_fdoc(n)[q-1])
+        except Exception:
+            if (n, q) == (nome, pno): raise
+            continue
+        _IMGS[(n, q)] = r; ims.append(r[0]); validas.append((n, q))
+    t0 = time.time()
+    try:
+        raws = _chandra_seguro(ims)
+    except Exception as e:
+        # o resto da rodada segue uma pagina por vez (o caminho de sempre), e um
+        # erro que se repita aparece no PDF da pagina, como antes
+        print(f"    ⚠️  lote de {len(ims)} paginas falhou ({str(e)[:120]}); "
+              "o resto da rodada vai uma pagina por vez")
+        LOTE_PAGINAS = 1
+        torch.cuda.empty_cache()
+        return
+    for ch, rw in zip(validas, raws): _RAWS[ch] = rw
+    dt = time.time() - t0
+    print(f"    ⚡ Chandra: {len(ims)} paginas de {len({n for n, _ in validas})} PDF(s) numa chamada, "
+          f"{dt:.0f}s ({dt/max(1, len(ims)):.1f} s/pagina)")
+
 def exportar_pdf(nome):
     _t0=time.time(); _medidor.comecar()
     pdf=PDFS_DIR/nome; slug=slugify(nome); out=EXPORT_DIR/slug; (out/'pages').mkdir(parents=True,exist_ok=True)
@@ -504,12 +610,14 @@ def exportar_pdf(nome):
 
     fdoc=fitz.open(str(pdf)); N=len(fdoc); lim=N if MAX_PAGINAS is None else min(N,MAX_PAGINAS)
     paginas=[]
-    # Com LOTE_PAGINAS > 1 o raw de um grupo de paginas e' pedido de uma vez; o
-    # laco abaixo so' consome o resultado. Com 1, e' uma chamada por pagina.
-    _raws = {}
+    # Com LOTE_PAGINAS > 1 o raw de um grupo de paginas (deste PDF e dos
+    # seguintes) e' pedido de uma vez; o laco abaixo so' consome o resultado.
+    # Com 1, e' uma chamada por pagina.
     for pi in range(lim):
         pno=pi+1; fpage=fdoc[pi]
-        im_hi,im_web,(w,h)=render_paginas(fpage)
+        if LOTE_PAGINAS > 1 and (nome, pno) not in _RAWS:
+            _preparar_lote(nome, pno)
+        im_hi,im_web,(w,h)=_IMGS.pop((nome, pno), None) or render_paginas(fpage)
         im_web.save(out/f'pages/p{pno:03d}.jpg', quality=85)
         img_path=out/f'pages/p{pno:03d}.jpg'
         # camada de texto selecionável (limiar) -> decide se a página é orgânica ou escaneada
@@ -517,11 +625,7 @@ def exportar_pdf(nome):
         tem_texto = len(texto_cru.strip()) >= TEXTO_MIN_CHARS
         regioes=detectar_regioes(img_path, w, h)
         tem_tabela = any(r['tipo_rota']=='tabela' for r in regioes)
-        if LOTE_PAGINAS > 1 and pno not in _raws:
-            grupo = [q for q in range(pno, min(pno+LOTE_PAGINAS, lim+1))]
-            for q, (rw, _sz) in zip(grupo, chandra_raw_lote([render_paginas(fdoc[q-1])[0] for q in grupo])):
-                _raws[q] = rw
-        blocos = blocos_chandra(im_hi, regioes, _raws.pop(pno, None))
+        blocos = blocos_chandra(im_hi, regioes, _RAWS.pop((nome, pno), None))
         rota = 'chandra'; tipo_pg = 'escaneada' if not tem_texto else 'organica'
         for j,b in enumerate(blocos): b['id']=f'p{pno}-b{j}'
         # salva recortes de figuras/gráficos p/ recuperação posterior na busca
@@ -603,6 +707,7 @@ for i, nome in enumerate(TARGETS, 1):
         print(f"    ❌ ERRO em {nome}: {e}")
         (EXPORT_DIR/'erros.json').write_text(json.dumps(erros,ensure_ascii=False,indent=2),encoding='utf-8')
     finally:
+        _esquecer(nome)
         gc.collect(); torch.cuda.empty_cache()
 
 IDX_PATH.write_text(json.dumps(INDEX,ensure_ascii=False,indent=2),encoding='utf-8')

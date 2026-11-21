@@ -151,11 +151,13 @@ o site assim que termina:
 sb100-extrair --quantos 10
 ```
 
-Para testar se fica mais rápido mandando 4 páginas por vez ao Chandra (no fim de
-cada PDF aparece uma linha com o uso da GPU, para comparar):
+Para mandar várias páginas por vez ao Chandra, somando PDFs (o lote continua
+nos próximos PDFs da fila). A cada chamada aparece uma linha
+`⚡ Chandra: N paginas ... s/pagina`, para comparar com o valor de antes. Na L4,
+comece com 8; se faltar memória, o lote é dividido sozinho:
 
 ```bash
-LOTE_PAGINAS=4 sb100-extrair --quantos 10
+LOTE_PAGINAS=8 sb100-extrair --quantos 10
 ```
 
 Depois, para vetorizar o que foi extraído:

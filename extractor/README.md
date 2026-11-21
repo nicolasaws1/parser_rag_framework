@@ -56,6 +56,16 @@ Metade da placa ociosa e 12 GB de VRAM sobrando. **Vale testar `LOTE_PAGINAS = 4
 e comparar o tempo com o mesmo documento. Se piorar ou estourar memória, volte
 para 1.
 
+Desde 21/11/2026 o lote **soma PDFs**: continua nas páginas dos próximos PDFs da
+fila, em vez de parar no fim de cada um (com artigos de ~10 páginas, pedir 50
+dava ~10). As figuras de cada página também vão numa chamada só. A cada chamada
+sai `⚡ Chandra: N paginas de K PDF(s) ... s/pagina`, o número para comparar.
+Cada página no lote ocupa ~1 GB de VRAM (medido numa A100: 11 páginas, 22,4 GB
+com o modelo): comece com 8 na L4 e 32 na A100 80 GB. Se faltar memória, o lote
+é dividido ao meio sozinho e o tamanho que coube vale para o resto da rodada. O
+resultado é o mesmo de uma página por vez (conferido com Chandra e YOLO
+simulados, em `layout.json`).
+
 ## Ritmo
 
 Medido em 213 páginas do pipeline híbrido: **16,9 s por página**. O modo
