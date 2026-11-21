@@ -1057,6 +1057,58 @@ def vet_tarefa(tid: str, pedido: Request):
     return _TAREFAS[tid]
 
 
+# ───────────────────────── figuras ─────────────────────────────────────────
+from api import figuras as _fig  # noqa: E402
+
+
+@app.get("/api/figuras", tags=["figuras"])
+def figuras_listar(pedido: Request):
+    """Todas as figuras extraídas, de qualquer documento, com o tipo lido da
+    descrição do Chandra e a URL assinada do recorte."""
+    auth.exigir_usuario(pedido, sb)
+    figs = _fig.listar(sb)
+    urls = _signed_lote([f["figura"] for f in figs if f.get("figura")])
+    return {"figuras": [{**f, "img_url": urls.get(f.get("figura"))} for f in figs],
+            "tipos": _fig.contagem(figs), "documentos": len({f["pdf_id"] for f in figs})}
+
+
+class PedidoFiguras(BaseModel):
+    q: str = ""
+    subtipo: str = "todos"
+    tipo: str = "todos"
+
+
+@app.post("/api/figuras/dataset", tags=["figuras"])
+def figuras_dataset(ped: PedidoFiguras, pedido: Request):
+    """Começa a montar o zip (imagens + figuras.csv + figuras.jsonl) com as
+    figuras que passam nos filtros da tela. O site acompanha pela tarefa."""
+    quem = auth.exigir_usuario(pedido, sb)
+    figs = _fig.filtrar(_fig.listar(sb), ped.q, ped.subtipo, ped.tipo)
+    if not figs:
+        raise HTTPException(400, "nenhuma figura com esses filtros")
+    baixar = lambda caminho: sb.storage.from_(IMG_BUCKET).download(caminho)  # noqa: E731
+    return _fig.iniciar_dataset(sb, baixar, figs, ped.model_dump(), quem.get("email") or "")
+
+
+@app.get("/api/figuras/dataset/{tid}", tags=["figuras"])
+def figuras_dataset_estado(tid: str, pedido: Request):
+    auth.exigir_usuario(pedido, sb)
+    t = _fig.tarefa(tid)
+    if t is None:
+        raise HTTPException(404, "tarefa não encontrada (o servidor reiniciou?)")
+    return t
+
+
+@app.get("/api/figuras/dataset/{tid}/zip", tags=["figuras"])
+def figuras_dataset_zip(tid: str, pedido: Request):
+    auth.exigir_usuario(pedido, sb)
+    p = _fig.arquivo_da_tarefa(tid)
+    if p is None:
+        raise HTTPException(404, "o zip não está pronto ou expirou: gere de novo")
+    nome = f"figuras_sb100_{datetime.now().strftime('%Y%m%d-%H%M')}.zip"
+    return FileResponse(p, media_type="application/zip", filename=nome)
+
+
 @app.get("/api/curadoria/ultima", tags=["curadoria"])
 def curadoria_ultima(pedido: Request):
     """Quando foi a última sincronização e o que ela achou."""
