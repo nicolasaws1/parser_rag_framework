@@ -106,6 +106,15 @@ chandra.generation_config.do_sample=False
 chandra.generation_config.repetition_penalty=1.10   # config que te deu o melhor Chandra
 chandra.generation_config.no_repeat_ngram_size=0
 print(f"✅ Chandra {time.time()-t0:.0f}s")
+# O Chandra 2 tem camadas de atencao linear; sem estes pacotes o transformers usa
+# a versao de referencia em PyTorch, correta mas bem mais lenta (os avisos
+# "falling back to its reference PyTorch implementation"). Diz na tela o que vale.
+try:
+    import fla  # noqa: F401
+    print("⚡ kernels rapidos (flash-linear-attention): ativos")
+except Exception as _e:
+    print(f"🐢 kernels rapidos (flash-linear-attention): nao ({type(_e).__name__}); "
+          "no notebook, KERNELS_RAPIDOS = True instala")
 
 # ───── cell 5 ─────
 META = {}
@@ -602,6 +611,9 @@ def _preparar_lote(nome, pno):
             continue
         _IMGS[(n, q)] = r; ims.append(r[0]); validas.append((n, q))
     t0 = time.time()
+    # a chamada leva minutos e so' imprime no fim: avisa antes, para nao parecer travado
+    print(f"    ⏳ Chandra: {len(ims)} paginas de {len({n for n, _ in validas})} PDF(s) numa chamada "
+          f"(as paginas aparecem quando ela terminar)…", flush=True)
     try:
         raws = _chandra_seguro(ims)
     except Exception as e:
