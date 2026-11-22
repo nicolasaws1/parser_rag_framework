@@ -436,6 +436,7 @@ def salvar_edicao(pdf_id: str, edicao: Edicao, pedido: Request):
     except Exception as e:
         raise HTTPException(503, f"tabela document_edits indisponível; aplique "
                                  f"supabase/002_edicoes.sql. Detalhe: {e}")
+    _fig.esquecer()
     registrar("documento_editado", autor, pdf_id,
               {"paginas": [p.get("n") for p in (edicao.layout or [])],
                "markdown": edicao.markdown is not None},
@@ -473,6 +474,7 @@ def remover_documento(pdf_id: str, pedido: Request, vetores: bool = True, confir
         raise HTTPException(404, str(e))
     except RuntimeError as e:
         raise HTTPException(502, str(e))
+    _fig.esquecer()
     registrar("pdf_removido", quem["email"], pdf_id,
               {k: r[k] for k in ("arquivo", "titulo", "paginas", "blocos", "imagens",
                                  "vetores", "vetores_apagados")},
@@ -488,6 +490,7 @@ def descartar_edicao(pdf_id: str, pedido: Request):
         sb.table("document_edits").delete().eq("pdf_id", pdf_id).execute()
     except Exception as e:
         raise HTTPException(503, f"tabela document_edits indisponível: {e}")
+    _fig.esquecer()
     registrar("edicao_descartada", quem["email"], pdf_id)
     return {"editado": False}
 
@@ -781,6 +784,7 @@ def extracao_upload(pedido: Request, arquivo: UploadFile = File(...),
             rel = extracao.processar(sb, pasta, substituir=substituir, avisar=avisar)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+            _fig.esquecer()          # as figuras novas aparecem já no próximo pedido da aba
         for g in rel["gravados"]:
             registrar("pdf_ingerido", quem["email"], g.get("pdf_id"),
                       {"origem": "upload", "arquivo": arquivo.filename,

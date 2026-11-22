@@ -200,6 +200,12 @@ def listar(sb, usar_cache: bool = True) -> list[dict]:
     return fora
 
 
+def esquecer() -> None:
+    """Joga fora a lista guardada. Quem grava extração, edição ou remoção chama
+    isto, para a aba mostrar a mudança no próximo pedido, não um minuto depois."""
+    _CACHE.clear()
+
+
 def _sem_acento(t: str) -> str:
     import unicodedata
     return "".join(c for c in unicodedata.normalize("NFD", t) if unicodedata.category(c) != "Mn").lower()

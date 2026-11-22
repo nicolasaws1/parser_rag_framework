@@ -1699,7 +1699,7 @@ async function upGravar(){
       '<div style="margin-top:16px;font-size:13px"><b>'+(j.gravados||[]).length+' gravado(s)</b>, '+
       (j.pulados||[]).length+' pulado(s), '+(j.falhas||[]).length+' com problema.</div>'+_upTabela(linhas);
     _upArq=null;
-    if((j.gravados||[]).length) carregarDocumentos().then(extRender);
+    if((j.gravados||[]).length){ FIG_EM=0; carregarDocumentos().then(extRender); }
   }catch(e){
     _upTravar(false); _upArq=null;
     _upMsg("Falhou ao gravar: "+esc(e.message)+"<br>Confira na Home o que chegou a entrar e, se faltar algo, envie o zip de novo.", true);
@@ -2643,8 +2643,10 @@ async function irFiguras(){
   el("view-gpu").style.display="none"; el("view-equipe").style.display="none"; el("view-vet").style.display="none";
   el("view-fig").style.display="block";
   el("topbar-tit").textContent="Figuras"; setNav("fig");
-  // as URLs assinadas das imagens valem 1 hora: recarrega antes de vencerem
-  if(!FIG.length || Date.now()-FIG_EM > 50*60*1000) await figCarregar(); else figRender();
+  // busca de novo a cada visita (o servidor guarda a lista por até 1 min, e
+  // esquece na hora quando entra extração ou edição); só a volta imediata
+  // reaproveita o que já está na tela
+  if(!FIG.length || Date.now()-FIG_EM > 60*1000) await figCarregar(); else figRender();
 }
 async function figCarregar(){
   el("fig-grade").innerHTML='<div class="md-vazio">Carregando as figuras…</div>';
