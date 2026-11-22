@@ -211,11 +211,17 @@ def _sem_acento(t: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", t) if unicodedata.category(c) != "Mn").lower()
 
 
-def filtrar(figs: list[dict], q: str = "", subtipo_id: str = "", tipo: str = "") -> list[dict]:
+def filtrar(figs: list[dict], q: str = "", subtipo_id: str = "", tipo: str = "",
+            subtipos: list[str] | None = None) -> list[dict]:
+    """`subtipos` é a seleção múltipla da tela: passa a figura de qualquer um
+    deles. Vazio, junto com `subtipo_id` vazio ou "todos", é todos os tipos."""
     termos = [t for t in _sem_acento(q or "").split() if t]
+    quer = {s for s in (subtipos or []) if s and s != "todos"}
+    if subtipo_id and subtipo_id != "todos":
+        quer.add(subtipo_id)
     fora = []
     for f in figs:
-        if subtipo_id and subtipo_id != "todos" and f["subtipo"] != subtipo_id:
+        if quer and f["subtipo"] not in quer:
             continue
         if tipo and tipo != "todos" and f["tipo"] != tipo:
             continue
@@ -397,7 +403,8 @@ def _montar(figs, filtros, quem, baixar_imagem, caminho: Path, t: dict) -> None:
                         else l["bbox"]})
         z.writestr("figuras.csv", "﻿" + buf.getvalue())
         z.writestr("figuras.jsonl", "".join(json.dumps(l, ensure_ascii=False) + "\n" for l in linhas))
-        desc_filtros = ", ".join(f"{k}={v}" for k, v in filtros.items() if v and v != "todos") or "nenhum (todas)"
+        desc_filtros = ", ".join(f"{k}={' + '.join(v) if isinstance(v, list) else v}"
+                                 for k, v in filtros.items() if v and v != "todos") or "nenhum (todas)"
         z.writestr("LEIA-ME.txt", LEIA_ME.format(
             quando=datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC"), quem=quem or "?",
             filtros=desc_filtros, n=len(linhas), com_img=com_img, sem_img=len(linhas) - com_img,

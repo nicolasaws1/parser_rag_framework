@@ -198,6 +198,41 @@
   .fig-modal-pe{display:flex;align-items:center;gap:8px;padding:12px 18px;border-top:1px solid var(--borda);flex-wrap:wrap;}
   .fig-modal-pe .esp{flex:1;}
   @media (max-width:900px){ .fig-modal-corpo{grid-template-columns:1fr;grid-template-rows:45% 55%;} }
+  /* filtros da aba Figuras: lista suspensa com seleção múltipla, em vez de botões soltos */
+  .fig-faixa{flex-wrap:wrap;gap:10px 12px;margin-bottom:14px;}
+  .fig-faixa .busca-wrap{min-width:260px;}
+  .fig-sel{position:relative;}
+  .fig-sel-btn{display:inline-flex;align-items:center;gap:8px;border:1.5px solid var(--borda);border-radius:11px;
+    padding:10px 13px;background:#fff;font-family:inherit;font-size:13px;color:#1a1a1a;cursor:pointer;
+    box-shadow:0 1px 3px rgba(0,0,0,.05);transition:border-color .15s,box-shadow .15s;max-width:300px;}
+  .fig-sel-btn:hover{border-color:#c9c9c9;}
+  .fig-sel-btn.ativo{border-color:var(--verde);}
+  .fig-sel-btn[aria-expanded="true"],.fig-sel-btn:focus-visible,.fig-sel-cl:focus-within{border-color:var(--verde);box-shadow:0 0 0 3px var(--verde-claro);outline:none;}
+  .fig-sel-btn svg{color:var(--cinza);flex-shrink:0;transition:transform .15s;}
+  .fig-sel-btn[aria-expanded="true"] svg{transform:rotate(180deg);}
+  .fig-sel-rot{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.45px;color:var(--cinza);}
+  #fig-tipo-txt{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .fig-sel-cl select{border:none;background:transparent;font-family:inherit;font-size:13px;font-weight:600;color:#1a1a1a;cursor:pointer;outline:none;padding:0;}
+  .fig-sel-painel{position:absolute;top:calc(100% + 6px);left:0;z-index:400;background:#fff;border:1px solid var(--borda);
+    border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.14);width:min(310px,calc(100vw - 32px));
+    max-height:min(440px,70vh);display:flex;flex-direction:column;}
+  .fig-sel-painel[hidden]{display:none;}
+  .fig-sel-cab{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px 9px;
+    border-bottom:1px solid var(--borda);font-size:12px;color:var(--cinza);}
+  .fig-sel-cab button{border:none;background:none;color:var(--verde);font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;padding:2px 4px;border-radius:6px;}
+  .fig-sel-cab button:disabled{color:#bbb;cursor:default;}
+  .fig-sel-lista{overflow:auto;padding:6px;}
+  .fig-sel-op{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;font-size:13px;cursor:pointer;}
+  .fig-sel-op:hover{background:var(--cinza-bg);}
+  .fig-sel-op input{accent-color:var(--verde);width:15px;height:15px;margin:0;cursor:pointer;flex-shrink:0;}
+  .fig-sel-op .n{margin-left:auto;color:var(--cinza);font-size:12px;font-variant-numeric:tabular-nums;}
+  .fig-sel-op.zero{opacity:.45;}
+  .fig-ativos{display:none;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 12px;}
+  .fig-tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;background:var(--verde-claro);color:var(--verde);
+    border:none;border-radius:14px;padding:4px 8px 4px 11px;cursor:pointer;font-family:inherit;}
+  .fig-tag:hover{filter:brightness(.96);}
+  .fig-tag b{font-size:14px;line-height:1;font-weight:500;opacity:.75;}
+  .fig-tag.limpar{background:none;color:var(--cinza);padding-left:6px;}
   .acoes{display:flex;align-items:center;gap:14px;}
   .sel-info{font-size:12.5px;color:var(--cinza);}
   .btn-parser{display:flex;align-items:center;gap:8px;background:var(--laranja);color:#fff;border:none;font-size:13px;font-weight:700;padding:10px 20px;border-radius:24px;cursor:pointer;transition:all .15s;}
@@ -849,32 +884,53 @@
     </div>
   </div>
   <div class="home" id="view-fig" style="display:none">
-    <div class="home-hero">
-      <h2>Figuras</h2>
-      <p>Todas as figuras extraídas, de todos os documentos. O tipo vem da descrição que o
+    <div class="home-hero recolhido" id="hero-fig" onclick="alternarHeroAba('fig')" title="Clique para expandir">
+      <div class="hero-topo">
+        <h2>Figuras</h2>
+        <svg class="hero-seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="opacity:.75">
+          <polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <p class="hero-oculta">Todas as figuras extraídas, de todos os documentos. O tipo vem da descrição que o
         Chandra OCR 2 escreve para cada recorte. Clique numa figura para ler a descrição inteira.</p>
-      <div class="home-badges">
+      <div class="home-badges hero-oculta">
         <div class="home-badge"><div class="n" id="fig-b-total">-</div><div class="l">Figuras</div></div>
         <div class="home-badge"><div class="n" id="fig-b-graf">-</div><div class="l">Gráficos</div></div>
         <div class="home-badge"><div class="n" id="fig-b-foto">-</div><div class="l">Fotos e imagens</div></div>
-        <div class="home-badge"><div class="n" id="fig-b-docs">-</div><div class="l">Documentos</div></div>
+        <div class="home-badge"><div class="n" id="fig-b-docs">-</div><div class="l">Documentos com figura</div></div>
       </div>
+      <div id="fig-resumo" class="hero-resumo"></div>
     </div>
-    <div class="busca-faixa">
+    <div class="busca-faixa fig-faixa">
       <div class="busca-wrap">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"
              stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
         <input id="fig-busca" type="search" placeholder="Buscar na descrição, na legenda, no título ou no arquivo…"
                oninput="figBuscar(this.value)" autocomplete="off">
       </div>
+      <div class="fig-sel" id="fig-sel-tipo">
+        <button type="button" class="fig-sel-btn" id="fig-tipo-btn" onclick="figTipoAbrir(event)"
+                aria-haspopup="true" aria-expanded="false" aria-controls="fig-tipo-painel">
+          <span class="fig-sel-rot">Tipo</span><span id="fig-tipo-txt">Todos</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="fig-sel-painel" id="fig-tipo-painel" hidden></div>
+      </div>
+      <label class="fig-sel-btn fig-sel-cl"><span class="fig-sel-rot">Classe</span>
+        <select id="fig-classe" onchange="figClasse(this.value)">
+          <option value="todos">Todas</option>
+          <option value="grafico">Gráficos</option>
+          <option value="foto">Fotos e imagens</option>
+        </select>
+      </label>
       <span id="fig-info" style="font-size:12.5px;color:var(--cinza);white-space:nowrap"></span>
       <button class="btn-parser" id="fig-btn-dataset" onclick="figBaixarDataset()"
               title="Zip com as imagens e um CSV com a descrição e os metadados de cada figura">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         <span id="fig-btn-dataset-txt">Baixar dataset</span></button>
     </div>
-    <div class="filtros" id="fig-tipos" style="margin-bottom:10px"><span class="filtro-lbl">Tipo (Chandra):</span></div>
-    <div class="filtros" id="fig-classes" style="margin-bottom:8px"><span class="filtro-lbl">Classe:</span></div>
+    <div class="fig-ativos" id="fig-ativos"></div>
     <div id="fig-msg" style="font-size:12.5px;margin:6px 0 14px;min-height:18px"></div>
     <div class="fig-grade" id="fig-grade"><div class="md-vazio">Carregando…</div></div>
     <div class="fig-mais" id="fig-mais"></div>
@@ -2124,7 +2180,7 @@ async function vetNoSite(){
    A lista é a mesma da Home (IDX), filtrada para o que ainda não foi extraído.
    Os pedidos feitos na Home ("Solicitar extração") vêm de /api/fila, com quem
    pediu e quando; eles abrem a lista e já chegam marcados na primeira visita. */
-var EXT_SEL=new Set(), EXT_FILA={}, EXT_FILTRO="todos", EXT_MAX=50, EXT_PRE=false, HERO_ABAS={gpu:false, vet:false};
+var EXT_SEL=new Set(), EXT_FILA={}, EXT_FILTRO="todos", EXT_MAX=50, EXT_PRE=false, HERO_ABAS={gpu:false, vet:false, fig:false};
 var SEG_POR_PAGINA=17;   // medido numa L4 com o Chandra (extractor/README.md)
 function irExtracaoGPU(){
   el("view-home").style.display="none"; el("view-extract").style.display="none"; el("view-equipe").style.display="none"; el("view-vet").style.display="none"; esconderFig();
@@ -2635,14 +2691,16 @@ function msgConta(id,txt,erro){
    Cadastro INTERNO: o endpoint exige token, entao so' quem ja' esta' dentro cria
    conta nova. A tela de login nao tem "criar conta" de proposito. */
 /* ── FIGURAS: todas as figuras do acervo, para analisar a descrição de cada uma ── */
-var FIG=[], FIG_VIS=[], FIG_TIPOS=[], FIG_Q="", FIG_ST="todos", FIG_CL="todos",
+/* FIG_STS: tipos marcados na lista (vazio = todos). Dá para marcar mais de um. */
+var FIG=[], FIG_VIS=[], FIG_TIPOS=[], FIG_Q="", FIG_STS=new Set(), FIG_CL="todos", FIG_CONT={},
     FIG_LIM=60, FIG_ATUAL=-1, FIG_EM=0, _figT=null;
-function esconderFig(){ var v=el("view-fig"); if(v) v.style.display="none"; figFecharModal(); }
+function esconderFig(){ var v=el("view-fig"); if(v) v.style.display="none"; figFecharModal(); figTipoFechar(); }
 async function irFiguras(){
   el("view-home").style.display="none"; el("view-extract").style.display="none";
   el("view-gpu").style.display="none"; el("view-equipe").style.display="none"; el("view-vet").style.display="none";
   el("view-fig").style.display="block";
   el("topbar-tit").textContent="Figuras"; setNav("fig");
+  aplicarHeroAba("fig");
   // busca de novo a cada visita (o servidor guarda a lista por até 1 min, e
   // esquece na hora quando entra extração ou edição); só a volta imediata
   // reaproveita o que já está na tela
@@ -2655,10 +2713,17 @@ async function figCarregar(){
     if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
     FIG=j.figuras||[]; FIG_TIPOS=j.tipos||[]; FIG_EM=Date.now();
     var br=function(n){ return n.toLocaleString("pt-BR"); };
+    var nGraf=FIG.filter(function(f){ return f.tipo==="grafico"; }).length, nFoto=FIG.filter(function(f){ return f.tipo==="foto"; }).length;
     el("fig-b-total").textContent=br(FIG.length);
-    el("fig-b-graf").textContent=br(FIG.filter(function(f){ return f.tipo==="grafico"; }).length);
-    el("fig-b-foto").textContent=br(FIG.filter(function(f){ return f.tipo==="foto"; }).length);
+    el("fig-b-graf").textContent=br(nGraf);
+    el("fig-b-foto").textContent=br(nFoto);
     el("fig-b-docs").textContent=br(j.documentos||0);
+    el("fig-resumo").innerHTML='<span><b>'+br(FIG.length)+'</b> figuras</span>'+
+      '<span><b>'+br(nGraf)+'</b> gráficos</span><span><b>'+br(nFoto)+'</b> fotos e imagens</span>'+
+      '<span><b>'+br(j.documentos||0)+'</b> documentos com figura</span>';
+    // um tipo marcado que sumiu do acervo não pode filtrar tudo para fora sem aparecer na lista
+    var existem=new Set(FIG_TIPOS.map(function(t){ return t.id; }));
+    FIG_STS.forEach(function(id){ if(!existem.has(id)) FIG_STS.delete(id); });
     figRender();
   }catch(e){ el("fig-grade").innerHTML='<div class="md-vazio">Não carregou: '+esc(e.message)+'</div>'; }
 }
@@ -2666,7 +2731,7 @@ function _semAcento(t){ return String(t||"").normalize("NFD").replace(/[̀-ͯ]/g
 function _figTermos(){ return _semAcento(FIG_Q).split(/\s+/).filter(Boolean); }
 /* mesma regra do servidor (api/figuras.py, filtrar): o dataset baixado tem as mesmas figuras da tela */
 function _figPassa(f, ignorarTipo){
-  if(!ignorarTipo && FIG_ST!=="todos" && f.subtipo!==FIG_ST) return false;
+  if(!ignorarTipo && FIG_STS.size && !FIG_STS.has(f.subtipo)) return false;
   if(FIG_CL!=="todos" && f.tipo!==FIG_CL) return false;
   var termos=_figTermos();
   if(termos.length){
@@ -2680,21 +2745,9 @@ function figRender(){
   // o número de cada tipo segue a busca e a classe escolhidas, para bater com a grade
   var cont={}, total=0;
   FIG.forEach(function(f){ if(_figPassa(f,true)){ cont[f.subtipo]=(cont[f.subtipo]||0)+1; total++; } });
-  var box=el("fig-tipos"); box.innerHTML='<span class="filtro-lbl">Tipo (Chandra):</span>';
-  [{id:"todos",rotulo:"Todos",n:total}].concat(FIG_TIPOS.map(function(t){ return {id:t.id,rotulo:t.rotulo,n:cont[t.id]||0}; }))
-    .forEach(function(o){
-      if(o.id!=="todos" && !o.n && FIG_ST!==o.id) return;
-      var b=document.createElement("button"); b.className="filtro"+(FIG_ST===o.id?" ativo":"");
-      b.innerHTML=esc(o.rotulo)+'<span class="n">'+o.n+'</span>';
-      b.onclick=function(){ FIG_ST=o.id; FIG_LIM=60; figRender(); };
-      box.appendChild(b);
-    });
-  var bc=el("fig-classes"); bc.innerHTML='<span class="filtro-lbl">Classe:</span>';
-  [["todos","Todas"],["grafico","Gráficos"],["foto","Fotos e imagens"]].forEach(function(c){
-    var b=document.createElement("button"); b.className="filtro"+(FIG_CL===c[0]?" ativo":"");
-    b.textContent=c[1]; b.onclick=function(){ FIG_CL=c[0]; FIG_LIM=60; figRender(); };
-    bc.appendChild(b);
-  });
+  FIG_CONT=cont; FIG_CONT._total=total;
+  _figTipoBotao(); _figTipoContagens(); _figAtivos();
+  el("fig-classe").value=FIG_CL;
   FIG_VIS=FIG.filter(function(f){ return _figPassa(f,false); });
   el("fig-info").textContent=FIG_VIS.length.toLocaleString("pt-BR")+" de "+FIG.length.toLocaleString("pt-BR")+" figuras";
   el("fig-btn-dataset-txt").textContent="Baixar dataset ("+FIG_VIS.length.toLocaleString("pt-BR")+")";
@@ -2705,6 +2758,75 @@ function figRender(){
   var resta=FIG_VIS.length-FIG_LIM;
   el("fig-mais").innerHTML = resta>0 ? '<button class="filtro" onclick="FIG_LIM+=60;figRender()">Mostrar mais '+
     Math.min(60,resta)+' (faltam '+resta+')</button>' : "";
+}
+/* lista de tipos: suspensa, com caixas de marcar. Fica aberta enquanto a
+   pessoa marca, e a grade muda a cada marca. O número de cada tipo segue a
+   busca e a classe, como fazia nos botões. */
+function _figTipoRot(id){
+  for(var i=0;i<FIG_TIPOS.length;i++) if(FIG_TIPOS[i].id===id) return FIG_TIPOS[i].rotulo;
+  return id;
+}
+function _figTipoBotao(){
+  var n=FIG_STS.size, b=el("fig-tipo-btn"), ids=Array.from(FIG_STS);
+  el("fig-tipo-txt").textContent = !n ? "Todos" : n===1 ? _figTipoRot(ids[0]) : n+" tipos";
+  b.classList.toggle("ativo", n>0);
+  b.title = n ? "Mostrando: "+ids.map(_figTipoRot).join(", ") : "Todos os tipos";
+}
+function _figTipoContagens(){
+  var p=el("fig-tipo-painel"); if(!p || p.hidden) return;
+  p.querySelectorAll(".fig-sel-op").forEach(function(op){
+    var n=FIG_CONT[op.dataset.id]||0, cx=op.querySelector("input");
+    cx.checked=FIG_STS.has(op.dataset.id);
+    op.querySelector(".n").textContent=n.toLocaleString("pt-BR");
+    op.classList.toggle("zero", !n && !cx.checked);
+  });
+  var lim=el("fig-tipo-limpar"); if(lim) lim.disabled=!FIG_STS.size;
+  var tot=el("fig-tipo-total"); if(tot) tot.textContent=(FIG_CONT._total||0).toLocaleString("pt-BR")+" figuras no total";
+}
+function figTipoAbrir(ev){
+  if(ev) ev.stopPropagation();
+  var p=el("fig-tipo-painel");
+  if(!p.hidden){ figTipoFechar(); return; }
+  p.innerHTML='<div class="fig-sel-cab"><span id="fig-tipo-total"></span>'+
+      '<button type="button" id="fig-tipo-limpar" onclick="figTipoLimpar()">Limpar seleção</button></div>'+
+    '<div class="fig-sel-lista" role="group" aria-label="Tipos de figura (Chandra)">'+
+    FIG_TIPOS.map(function(t){
+      return '<label class="fig-sel-op" data-id="'+esc(t.id)+'"><input type="checkbox" value="'+esc(t.id)+'"'+
+        (FIG_STS.has(t.id)?' checked':'')+' onchange="figTipoMarcar(this.value,this.checked)">'+
+        '<span>'+esc(t.rotulo)+'</span><span class="n"></span></label>';
+    }).join("")+'</div>';
+  p.style.left="0"; p.hidden=false;
+  // em tela estreita a lista passaria da borda direita: desloca para dentro
+  var sobra=window.innerWidth-12-p.getBoundingClientRect().right;
+  if(sobra<0) p.style.left=sobra+"px";
+  el("fig-tipo-btn").setAttribute("aria-expanded","true");
+  _figTipoContagens();
+  document.addEventListener("click", _figTipoFora, true);
+  document.addEventListener("keydown", _figTipoEsc);
+}
+function figTipoFechar(){
+  var p=el("fig-tipo-painel"); if(!p || p.hidden) return;
+  p.hidden=true; el("fig-tipo-btn").setAttribute("aria-expanded","false");
+  document.removeEventListener("click", _figTipoFora, true);
+  document.removeEventListener("keydown", _figTipoEsc);
+}
+function _figTipoFora(e){ if(!el("fig-sel-tipo").contains(e.target)) figTipoFechar(); }
+function _figTipoEsc(e){ if(e.key==="Escape"){ figTipoFechar(); el("fig-tipo-btn").focus(); } }
+function figTipoMarcar(id, sim){
+  if(sim) FIG_STS.add(id); else FIG_STS.delete(id);
+  FIG_LIM=60; figRender();
+}
+function figTipoLimpar(){ FIG_STS.clear(); FIG_LIM=60; figRender(); }
+function figClasse(v){ FIG_CL=v||"todos"; FIG_LIM=60; figRender(); }
+/* os tipos marcados, logo abaixo da busca: dá para ver o filtro sem abrir a lista e tirar um por um */
+function _figAtivos(){
+  var box=el("fig-ativos"); if(!box) return;
+  if(!FIG_STS.size){ box.style.display="none"; box.innerHTML=""; return; }
+  box.style.display="flex";
+  box.innerHTML='<span class="filtro-lbl">Tipos:</span>'+Array.from(FIG_STS).map(function(id){
+    return '<button type="button" class="fig-tag" data-id="'+esc(id)+'" onclick="figTipoMarcar(this.dataset.id,false)" '+
+      'title="Tirar do filtro">'+esc(_figTipoRot(id))+' <b aria-hidden="true">×</b></button>';
+  }).join("")+'<button type="button" class="fig-tag limpar" onclick="figTipoLimpar()">Limpar</button>';
 }
 /* realça os termos da busca num texto já escapado */
 function _figRealce(txtEsc){
@@ -2835,7 +2957,7 @@ async function figBaixarDataset(){
   m.textContent="Preparando o dataset de "+n.toLocaleString("pt-BR")+" figura(s)…";
   try{
     var r=await apiFetch(API+"/figuras/dataset",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({q:FIG_Q, subtipo:FIG_ST, tipo:FIG_CL})});
+      body:JSON.stringify({q:FIG_Q, subtipos:Array.from(FIG_STS), tipo:FIG_CL})});
     var t=await r.json(); if(!r.ok) throw new Error(t.detail||("HTTP "+r.status));
     while(t.estado!=="pronto"){
       if(t.estado==="falhou") throw new Error(t.erro||"o servidor não conseguiu montar o zip");
@@ -3341,7 +3463,7 @@ function vetorizar(){
 montarFiltros(); montarSituacoes();
 try{
   HERO_ABERTO = sessionStorage.getItem("sb100_hero") === "1";
-  ["gpu","vet"].forEach(function(k){ HERO_ABAS[k] = sessionStorage.getItem("sb100_hero_"+k) === "1"; });
+  ["gpu","vet","fig"].forEach(function(k){ HERO_ABAS[k] = sessionStorage.getItem("sb100_hero_"+k) === "1"; });
   var _pp = sessionStorage.getItem("sb100_pp");
   if(_pp !== null){ POR_PAGINA = parseInt(_pp,10)||0; MOSTRANDO = POR_PAGINA || 1e9;
     var _s = el("por-pagina"); if(_s) _s.value = String(POR_PAGINA); }

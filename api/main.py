@@ -1079,6 +1079,7 @@ def figuras_listar(pedido: Request):
 class PedidoFiguras(BaseModel):
     q: str = ""
     subtipo: str = "todos"
+    subtipos: list[str] = []          # seleção múltipla da tela; vazio = todos
     tipo: str = "todos"
 
 
@@ -1087,7 +1088,7 @@ def figuras_dataset(ped: PedidoFiguras, pedido: Request):
     """Começa a montar o zip (imagens + figuras.csv + figuras.jsonl) com as
     figuras que passam nos filtros da tela. O site acompanha pela tarefa."""
     quem = auth.exigir_usuario(pedido, sb)
-    figs = _fig.filtrar(_fig.listar(sb), ped.q, ped.subtipo, ped.tipo)
+    figs = _fig.filtrar(_fig.listar(sb), ped.q, ped.subtipo, ped.tipo, ped.subtipos)
     if not figs:
         raise HTTPException(400, "nenhuma figura com esses filtros")
     baixar = lambda caminho: sb.storage.from_(IMG_BUCKET).download(caminho)  # noqa: E731
