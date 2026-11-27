@@ -773,7 +773,7 @@
              stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="opacity:.75">
           <polyline points="6 9 12 15 18 9"/></svg>
       </div>
-      <p class="hero-oculta">Fatia o texto extraído (1024 caracteres, 20% de sobreposição, tabelas e figuras inteiras) e grava os
+      <p class="hero-oculta">Fatia o texto extraído (estratégia, tamanho e sobreposição escolhidos em cada coleção; tabelas e figuras inteiras) e grava os
          vetores no Qdrant. Cada coleção é um índice à parte: um documento pode estar numa e faltar em outra,
          então tudo aqui é sempre em relação à coleção escolhida.</p>
       <div class="home-badges hero-oculta">
@@ -810,7 +810,21 @@
             <option value="semantic">semantic</option>
             <option value="fixed">fixed</option>
           </select>
-          <span style="font-size:11.5px;color:var(--cinza)">1024 caracteres, 205 de sobreposição; tabela e figura sempre inteiras</span>
+          <label for="vet-nova-tamanho" style="font-size:12.5px;font-weight:700;margin-left:6px">Tamanho</label>
+          <select id="vet-nova-tamanho" onchange="vetFatiaDica()">
+            <option value="512">512</option>
+            <option value="1024" selected>1024</option>
+            <option value="2048">2048</option>
+          </select>
+          <label for="vet-nova-sobrep" style="font-size:12.5px;font-weight:700;margin-left:6px">Sobreposição</label>
+          <select id="vet-nova-sobrep" onchange="vetFatiaDica()">
+            <option value="0">0%</option>
+            <option value="10">10%</option>
+            <option value="15">15%</option>
+            <option value="20" selected>20%</option>
+            <option value="25">25%</option>
+          </select>
+          <span id="vet-fatia-dica" style="font-size:11.5px;color:var(--cinza)">1024 caracteres, 205 de sobreposição; tabela e figura sempre inteiras</span>
         </div>
         <div id="vet-estrategia-dica" style="font-size:12px;margin-top:4px"></div>
         <div style="font-size:11.5px;color:var(--cinza);margin-top:4px">A data, quem criou, os modelos, o tamanho dos trechos e a estratégia de chunking ficam registrados sozinhos junto com a descrição, na própria coleção do Qdrant. A estratégia não muda depois: todo pacote desta coleção sai fatiado com ela.</div>
@@ -1847,28 +1861,37 @@ function vetNovaAbrir(abrir){
   if(abrir && CARGO!=="admin") return;
   f.style.display = abrir ? "block" : "none";
   if(b){ b.classList.toggle("aberto", abrir); b.title = abrir ? "Fechar" : "Criar uma coleção nova"; }
-  if(abrir){ vetEstrategiaDica(); el("vet-nova-nome").focus(); }
+  if(abrir){ vetEstrategiaDica(); vetFatiaDica(); el("vet-nova-nome").focus(); }
 }
 /* estratégias de chunking do texto corrido (api/chunker.py); as mesmas do estudo do TG */
 var VET_ESTRATEGIAS={
   recursive:"Corta de preferência entre parágrafos, depois entre linhas e só então entre palavras (RecursiveCharacterTextSplitter). Recomendada: no estudo do TG empatou com struct e semantic e ganhou da fixed.",
   struct:"Divide nas seções do artigo (Introdução, Material e Métodos, Resultados…) e aplica o recursive dentro de cada uma: nenhum trecho junta duas seções. O título da seção vai no payload.",
   semantic:"Corta onde o assunto muda: o Qwen3 compara frases vizinhas e corta nas 5% mais distantes (algoritmo do SemanticChunker). Mais lento, porque calcula embeddings também para fatiar.",
-  fixed:"Janelas de 1024 caracteres sem olhar o texto: corta palavras e frases no meio. Serve de referência para comparar as outras.",
+  fixed:"Janelas do tamanho escolhido sem olhar o texto: corta palavras e frases no meio. Serve de referência para comparar as outras.",
   blocos:"A estratégia anterior à escolha: janelas de 1024 caracteres cortadas no último espaço. As coleções antigas continuam com ela, para os trechos não se misturarem."
 };
 function vetEstrategiaDica(){
   var s=el("vet-nova-estrategia"), d=el("vet-estrategia-dica");
   if(s&&d) d.textContent=VET_ESTRATEGIAS[s.value]||"";
 }
+/* sobreposição em caracteres, com o mesmo arredondamento do servidor (api/chunker.py, sobreposicao_de) */
+function _vetSobre(tam, pct){ return Math.round(tam*pct/100); }
+function vetFatiaDica(){
+  var t=parseInt(el("vet-nova-tamanho").value,10), p=parseInt(el("vet-nova-sobrep").value,10), d=el("vet-fatia-dica");
+  if(d) d.textContent=t+" caracteres, "+_vetSobre(t,p)+" de sobreposição; tabela e figura sempre inteiras";
+}
 async function vetCriarColecao(){
   var nome=(el("vet-nova-nome").value||"").trim(), desc=(el("vet-nova-desc").value||"").trim();
   var est=el("vet-nova-estrategia").value;
+  var tam=parseInt(el("vet-nova-tamanho").value,10), pct=parseInt(el("vet-nova-sobrep").value,10);
   if(!nome) return;
   if(desc.length<10){ alert("Escreva uma descrição para a coleção (pelo menos 10 caracteres)."); el("vet-nova-desc").focus(); return; }
-  if(!confirm("Criar a coleção "+nome+" no Qdrant, com chunking "+est+"?\n\nA estratégia não muda depois.")) return;
+  if(!confirm("Criar a coleção "+nome+" no Qdrant?\n\nChunking "+est+", trechos de "+tam+" caracteres, sobreposição de "+
+              pct+"% ("+_vetSobre(tam,pct)+" caracteres).\n\nIsso não muda depois.")) return;
   try{
-    var r=await apiFetch(API+"/vetorizacao/colecoes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome:nome, descricao:desc, estrategia:est})});
+    var r=await apiFetch(API+"/vetorizacao/colecoes",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({nome:nome, descricao:desc, estrategia:est, tamanho:tam, sobreposicao_pct:pct})});
     var j=await r.json(); if(!r.ok) throw new Error(j.detail||("HTTP "+r.status));
     el("vet-nova-nome").value=""; el("vet-nova-desc").value=""; VET_SEL.clear(); vetNovaAbrir(false);
     try{ localStorage.setItem("sb100_vet_col", j.nome); }catch(_){}
@@ -1907,7 +1930,10 @@ function vetMostrarDescricao(editando){
     '</div>'+
     '<div class="vet-desc-linha" style="margin-top:4px"><b>Chunking:</b> '+
     '<span title="'+esc(VET_ESTRATEGIAS[est]||"")+'" style="padding:1px 8px;border-radius:10px;background:var(--borda);font-size:12px">'+
-      esc(est==="blocos"?"blocos (padrão anterior)":est)+'</span></div>';
+      esc(est==="blocos"?"blocos (padrão anterior)":est)+'</span>'+
+    '<span style="font-size:12px;color:var(--cinza);margin-left:8px">'+
+      esc(String(i.chunk||1024))+' caracteres, sobreposição de '+esc(String(i.sobreposicao!=null?i.sobreposicao:205))+
+      (i.sobreposicao_pct!=null?' ('+esc(String(i.sobreposicao_pct))+'%)':'')+'</span></div>';
 }
 async function vetSalvarDescricao(){
   var t=(el("vet-desc-ed").value||"").trim();

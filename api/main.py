@@ -835,6 +835,8 @@ class NovaColecao(BaseModel):
     nome: str
     descricao: str = ""
     estrategia: str = "recursive"      # chunking do LangChain: recursive, struct, semantic, fixed
+    tamanho: int = 1024                # caracteres por trecho: 512, 1024 ou 2048
+    sobreposicao_pct: int = 20         # 0, 10, 15, 20 ou 25% do tamanho
 
 
 class DescricaoColecao(BaseModel):
@@ -872,12 +874,13 @@ def vet_criar_colecao(nova: NovaColecao, pedido: Request):
     quem = auth.exigir_cargo(pedido, sb, "admin")
     try:
         c = _qdrant_ou_502(_vet().criar_colecao, nova.nome.strip(), nova.descricao, quem["email"],
-                           nova.estrategia)
+                           nova.estrategia, nova.tamanho, nova.sobreposicao_pct)
     except ValueError as e:
         raise HTTPException(400, str(e))
     registrar("documento_editado", quem["email"], None,
               {"acao": "colecao_criada", "colecao": c["nome"], "descricao": c["info"]["descricao"],
-               "estrategia": c["info"]["estrategia"]},
+               "estrategia": c["info"]["estrategia"], "tamanho": c["info"]["chunk"],
+               "sobreposicao": c["info"]["sobreposicao"]},
               pedido.client.host if pedido.client else None)
     return c
 

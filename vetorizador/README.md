@@ -33,15 +33,24 @@ fica marcado como teste.
 ## Estratégia de chunking
 
 Ao criar a coleção (botão **+**), o admin escolhe como o texto corrido é fatiado,
-com os splitters do LangChain. Tamanho (1024 caracteres) e sobreposição (205) são
-os mesmos nas quatro, e tabela e figura entram sempre inteiras.
+com os splitters do LangChain, e também o tamanho dos trechos (512, 1024 ou 2048
+caracteres) e a sobreposição (0, 10, 15, 20 ou 25% do tamanho; 10% de 1024 = 102,
+20% = 205, o padrão). Tabela e figura entram sempre inteiras. Os três ficam no
+metadado da coleção (`estrategia`, `chunk`, `sobreposicao`, `sobreposicao_pct`) e
+viajam no pacote; coleção criada antes da escolha segue com 1024/205.
+
+No `recursive` e no `struct`, a sobreposição é um teto do LangChain, em pedaços
+inteiros (parágrafo, linha, palavra): na prática fica um pouco abaixo dele, e
+quando o pedaço que sobra é um parágrafo curto inteiro pode passar um pouco
+(medido com struct, 1024 e 10% nos 144 documentos: 1 de 6.552 pares passou, com
+uma legenda de 134 caracteres).
 
 | estratégia | como corta |
 |---|---|
 | `recursive` (padrão) | `RecursiveCharacterTextSplitter`: parágrafo, depois linha, depois palavra |
 | `struct` | nos títulos de seção do artigo, e o `recursive` dentro de cada seção; o título vai no payload (`secao`) |
-| `semantic` | algoritmo do `SemanticChunker`: o Qwen3 compara frases vizinhas e corta nas 5% mais distantes; trecho maior que 1024 é subdividido pelo `recursive` |
-| `fixed` | janelas de 1024 sem olhar o texto (corta palavras); serve de referência |
+| `semantic` | algoritmo do `SemanticChunker`: o Qwen3 compara frases vizinhas e corta nas 5% mais distantes; trecho maior que o tamanho é subdividido pelo `recursive` |
+| `fixed` | janelas do tamanho escolhido sem olhar o texto (corta palavras); serve de referência |
 
 A estratégia fica no metadado da coleção (`estrategia`) e não muda depois: todo
 pacote da coleção sai com ela, e o `rodar_vetorizacao.py` recusa gravar um pacote
@@ -89,7 +98,7 @@ Se a sessão cair, rode de novo com o mesmo pacote: o documento já calculado n�
 
 | | |
 |---|---|
-| texto | janelas de 1024 caracteres com 205 de sobreposição (20%), cortadas em espaço |
+| texto | pela estratégia, tamanho e sobreposição da coleção (as antigas: 1024 caracteres com 205 de sobreposição, cortadas em espaço) |
 | tabela | inteira, num trecho só; o HTML original vai no payload (`tabela_html`) |
 | figura | legenda + descrição, com o caminho do recorte (`figura`) |
 

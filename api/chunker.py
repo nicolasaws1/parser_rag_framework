@@ -59,6 +59,15 @@ SEMANTIC_MAX_CHARS = 4000            # só para CALCULAR a distância: frase gig
                                      # sem ponto) não estoura a GPU; o trecho não é cortado
 TAMANHO = 1024
 SOBREPOSICAO = 205                      # 20% de 1024
+# escolhidos na criação da coleção (aba Vetorização); o padrão acima vale para
+# as coleções criadas antes da escolha existir
+TAMANHOS = (512, 1024, 2048)
+SOBREPOSICOES_PCT = (0, 10, 15, 20, 25)
+
+
+def sobreposicao_de(tamanho: int, pct: int) -> int:
+    """Sobreposição em caracteres: 20% de 1024 = 205 (o padrão), 10% = 102."""
+    return round(tamanho * pct / 100)
 TIPOS_TABELA = ("tabela",)
 TIPOS_FIGURA = ("grafico", "foto")
 

@@ -113,19 +113,26 @@ def _descricao(texto: str) -> str:
 
 
 def criar_colecao(nome: str, descricao: str = "", quem: str = "",
-                  estrategia: str = "recursive") -> dict:
+                  estrategia: str = "recursive", tamanho: int = chunker.TAMANHO,
+                  sobreposicao_pct: int = 20) -> dict:
     """Cria a coleção e grava nela, como metadado do próprio Qdrant, a descrição
     escrita por quem criou e o que já se sabe na hora: data, autor, modelos e
     fatiamento. Fica junto da coleção, para quem a consultar de outro lugar.
 
-    A estratégia de chunking (do LangChain) é escolhida aqui e não muda depois:
-    todo pacote desta coleção sai com ela, então os trechos nunca se misturam."""
+    A estratégia de chunking (do LangChain), o tamanho dos trechos e a
+    sobreposição são escolhidos aqui e não mudam depois: todo pacote desta
+    coleção sai com eles, então os trechos nunca se misturam."""
     if not _NOME_OK.match(nome or ""):
         raise ValueError("nome: 3 a 63 caracteres, só minúsculas, números e _")
     descricao = _descricao(descricao)
     estrategia = (estrategia or "").strip().lower()
     if estrategia not in chunker.ESTRATEGIAS:
         raise ValueError(f"estratégia de chunking: escolha {', '.join(chunker.ESTRATEGIAS)}")
+    if tamanho not in chunker.TAMANHOS:
+        raise ValueError(f"tamanho dos trechos: escolha {', '.join(map(str, chunker.TAMANHOS))}")
+    if sobreposicao_pct not in chunker.SOBREPOSICOES_PCT:
+        raise ValueError("sobreposição: escolha "
+                         + ", ".join(f"{p}%" for p in chunker.SOBREPOSICOES_PCT))
     existentes = {c["name"] for c in _req("GET", "/collections")["result"]["collections"]}
     if nome in existentes:
         raise ValueError(f"a coleção {nome} já existe")
@@ -137,7 +144,8 @@ def criar_colecao(nome: str, descricao: str = "", quem: str = "",
     info = {"descricao": descricao,
             "criada_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "criada_por": quem, "modelo_denso": MODELO_DENSO, "modelo_esparso": MODELO_ESPARSO,
-            "chunk": chunker.TAMANHO, "sobreposicao": chunker.SOBREPOSICAO,
+            "chunk": tamanho, "sobreposicao": chunker.sobreposicao_de(tamanho, sobreposicao_pct),
+            "sobreposicao_pct": sobreposicao_pct, "chunk_unidade": "caracteres",
             "estrategia": estrategia, "chunk_biblioteca": "langchain-text-splitters",
             "versao_chunker": chunker.versao(estrategia)}
     _req("PATCH", f"/collections/{nome}", json={"metadata": info})
@@ -362,8 +370,18 @@ def estrategia_da_colecao(colecao: str) -> str:
     """A estratégia gravada no metadado da coleção. Coleção criada antes da
     escolha existir não tem: segue com a `blocos`, a de sempre, para os pontos
     novos não se misturarem com os que já estão lá."""
+    return fatiamento_da_colecao(colecao)["estrategia"]
+
+
+def fatiamento_da_colecao(colecao: str) -> dict:
+    """Estratégia, tamanho e sobreposição gravados no metadado da coleção.
+    Coleção sem eles (criada antes da escolha) segue com 1024/205, os de sempre."""
     meta = (_req("GET", f"/collections/{colecao}")["result"].get("config") or {}).get("metadata") or {}
-    return chunker.normalizar_estrategia(meta.get("estrategia"))
+    tamanho = int(meta.get("chunk") or chunker.TAMANHO)
+    sobre = meta.get("sobreposicao")
+    sobre = int(sobre) if sobre is not None else chunker.SOBREPOSICAO
+    return {"estrategia": chunker.normalizar_estrategia(meta.get("estrategia")),
+            "tamanho": tamanho, "sobreposicao": sobre}
 
 
 def montar_pacote(sb, colecao: str, ids: list[str], quem: str) -> tuple[bytes, dict]:
@@ -379,11 +397,12 @@ def montar_pacote(sb, colecao: str, ids: list[str], quem: str) -> tuple[bytes, d
     metas = {m["pdf_id"]: m for m in sb.table("article_metadata").select("*")
              .in_("pdf_id", ids).execute().data}
 
-    estrategia = estrategia_da_colecao(colecao)
+    fat = fatiamento_da_colecao(colecao)
+    estrategia = fat["estrategia"]
     pacote = datetime.now().strftime("%Y%m%d-%H%M") + "-" + uuid.uuid4().hex[:6]
     man = {"pacote": pacote, "colecao": colecao, "criado_por": quem,
            "criado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-           "chunk": {"tamanho": chunker.TAMANHO, "sobreposicao": chunker.SOBREPOSICAO,
+           "chunk": {"tamanho": fat["tamanho"], "sobreposicao": fat["sobreposicao"],
                      "estrategia": estrategia, "versao": chunker.versao(estrategia)},
            "modelos": MODELOS, "documentos": [],
            # só a URL: a chave quem tem é quem roda, e ela não viaja no pacote
