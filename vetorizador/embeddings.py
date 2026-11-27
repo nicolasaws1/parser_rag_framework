@@ -19,6 +19,11 @@ coleção antiga, os pontos novos ficam com pesos levemente diferentes dos velho
 from __future__ import annotations
 
 import base64
+import os
+
+# antes de qualquer import do torch: sem isto a memória fragmenta entre lotes de
+# tamanhos diferentes e sobra GPU "reservada mas sem uso" (4,7 GB numa L4)
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 MODELO_DENSO = "Qwen/Qwen3-Embedding-0.6B"
 MODELO_ESPARSO = "opensearch-project/opensearch-neural-sparse-encoding-doc-v2-distill"
@@ -42,28 +47,57 @@ class Embedder:
         self._esp = AutoModelForMaskedLM.from_pretrained(MODELO_ESPARSO).to(self.dev).eval()
         self._especiais = list(self._tok.all_special_ids)
 
+    def _sem_estourar(self, fn, textos: list[str]):
+        """Chama fn(textos, lote); se a GPU encher, refaz com metade do lote.
+
+        Quem estoura é o grupo dos trechos mais longos: o sentence-transformers
+        junta os textos por tamanho, e tabela grande vai inteira (já houve de
+        22 mil caracteres). Com 128 delas num lote, uma L4 de 22 GB enche. O
+        lote menor vale só para esta chamada: o documento seguinte, sem tabela
+        grande, volta ao lote cheio."""
+        lote = self.lote
+        while True:
+            try:
+                return fn(textos, lote)
+            except self.torch.cuda.OutOfMemoryError:
+                self.torch.cuda.empty_cache()
+                if lote <= 1:
+                    raise
+                lote = max(1, lote // 2)
+                print(f"      memória da GPU cheia: refazendo este documento com lote {lote}",
+                      flush=True)
+
+    def _encode(self, textos: list[str], lote: int):
+        return self._denso.encode(textos, batch_size=lote, convert_to_numpy=True,
+                                  normalize_embeddings=True, show_progress_bar=False)
+
     def denso(self, textos: list[str]) -> list[str]:
         """float32 em base64: 4 KB por vetor, e o site lê sem numpy."""
         import numpy as np
-        emb = self._denso.encode(textos, batch_size=self.lote, convert_to_numpy=True,
-                                 normalize_embeddings=True, show_progress_bar=False)
+        emb = self._sem_estourar(self._encode, textos)
         return [base64.b64encode(np.asarray(e, dtype="<f4").tobytes()).decode() for e in emb]
 
     def matriz(self, textos: list[str]):
         """Vetores densos normalizados, em numpy: o chunking semantic mede com eles
         a distância entre frases vizinhas."""
-        return self._denso.encode(textos, batch_size=self.lote, convert_to_numpy=True,
-                                  normalize_embeddings=True, show_progress_bar=False)
+        return self._sem_estourar(self._encode, textos)
 
     def esparso(self, textos: list[str]) -> list[dict]:
+        return self._sem_estourar(self._esparso, textos)
+
+    def _esparso(self, textos: list[str], lote: int) -> list[dict]:
         t = self.torch
         fora = []
-        for i in range(0, len(textos), self.lote):
-            tk = self._tok(textos[i:i + self.lote], return_tensors="pt", padding=True,
+        for i in range(0, len(textos), lote):
+            tk = self._tok(textos[i:i + lote], return_tensors="pt", padding=True,
                            truncation=True, max_length=MAX_TOKENS_ESPARSO).to(self.dev)
             with t.no_grad():
                 logits = self._esp(**tk).logits
-            v, _ = t.max(logits * tk["attention_mask"].unsqueeze(-1), dim=1)
+            # máscara no próprio tensor: lote x 512 x 30 mil em float32 já são ~8 GB
+            # com lote 128, e `logits * máscara` criaria outra cópia do mesmo tamanho
+            logits.mul_(tk["attention_mask"].unsqueeze(-1))
+            v, _ = t.max(logits, dim=1)
+            del logits
             v = t.log1p(t.relu(v))
             v[:, self._especiais] = 0
             for linha in v:
